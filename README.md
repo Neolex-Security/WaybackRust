@@ -42,11 +42,13 @@ USAGE:
 
 FLAGS:
     -h, --help       Prints help information
+    -n, --nocheck    Don't check the HTTP status
     -s, --subs       Get subdomains too
     -V, --version    Prints version information
 
 ARGS:
     <domain>    Get urls from this domain
+
 ```
 
 ###### Robots command :
