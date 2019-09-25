@@ -19,7 +19,8 @@ fn main() {
                         .short("s")
                         .long("subs")
                         .help("Get subdomains too"),
-                ),
+                )
+                .arg(Arg::with_name("nocheck").short("n").long("nocheck").help("Don't check the HTTP status")),
         )
         .subcommand(
             SubCommand::with_name("robots")
@@ -32,11 +33,10 @@ fn main() {
     // get all urls responses codes
     if let Some(argsmatches) = argsmatches.subcommand_matches("urls") {
         let domain = argsmatches.value_of("domain").unwrap();
-        if argsmatches.is_present("subs") {
-            wayback_url(domain, true);
-        } else {
-            wayback_url(domain, false);
-        }
+        let subs = argsmatches.is_present("subs");
+        let check = !argsmatches.is_present("nocheck");
+         wayback_url(domain, subs,check);
+
         return;
     }
 
@@ -49,7 +49,7 @@ fn main() {
     println!();
 }
 
-fn wayback_url(domain: &str, subs: bool) {
+fn wayback_url(domain: &str, subs: bool, check: bool) {
     let mut pattern = format!("{}/*", domain);
     if subs {
         pattern = format!("*.{}/*", domain);
@@ -65,7 +65,11 @@ fn wayback_url(domain: &str, subs: bool) {
         },
         Err(e) => panic!("Error GET request: {}", e),
     };
-    http_status_urls(urls);
+    if check {
+        http_status_urls(urls);
+    }else{
+        println!("{}",urls.join("\n"));
+    }
 }
 
 fn http_status_urls(urls: Vec<String>) {
