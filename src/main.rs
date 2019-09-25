@@ -46,6 +46,7 @@ fn main() {
         return;
     }
     app.clone().print_help().unwrap();
+    println!();
 }
 
 fn wayback_url(domain: &str, subs: bool) {
