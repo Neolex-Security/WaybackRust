@@ -16,7 +16,7 @@ Here is the functionalities :
 ## Usage
 
 ```
-waybackrust 0.1.0
+waybackrust 0.1.1
 Neolex <hascoet.kevin@neolex-security.fr>
 Wayback machine tool for bug bounty
 
@@ -30,7 +30,10 @@ FLAGS:
 SUBCOMMANDS:
     help      Prints this message or the help of the given subcommand(s)
     robots    Get all disallowed entries from robots.txt
+    unify     Get the content of all archives for a given url
     urls      Get all urls for a domain
+
+
 ```
 ###### Urls command :
 ```
@@ -65,6 +68,25 @@ FLAGS:
 
 ARGS:
     <domain>    Get disallowed urls from this domain
+```
+
+###### Unify command : 
+```
+waybackrust-unify 
+Get the content of all archives for a given url
+
+USAGE:
+    waybackrust unify [OPTIONS] <url>
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+OPTIONS:
+    -o, --output <FILE>    name of the file to write contents of archives
+
+ARGS:
+    <url>    The url you want to unify
 ```
 ## Ideas of new features
 If you have idea of improvement and new features in the tool please create an issue or contact me.
