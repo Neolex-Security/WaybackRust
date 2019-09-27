@@ -66,3 +66,5 @@ FLAGS:
 ARGS:
     <domain>    Get disallowed urls from this domain
 ```
+## Ideas of new features
+If you have idea of improvement and new features in the tool please create an issue or contact me.
