@@ -1,7 +1,8 @@
 [package]
 name = "waybackrust"
 version = "0.1.1"
-authors = ["neolex"]
+authors = ["Neolex (Kevin Hascoet) <hascoet.kevin@neolex-security.fr>"]
+description = "A tool to query the WaybackMachine (https://archive.org/web/)..."
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

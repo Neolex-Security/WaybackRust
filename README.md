@@ -9,6 +9,10 @@ Here is the functionalities :
 
 ## Install 
 
+##### from cargo (crates.io):
+`cargo install waybackrust`
+
+##### from github:
 * Clone this repository `git clone https://github.com/Neolex-Security/WaybackRust`  
 * `cargo build --release`
 * The executable is in : `./target/release/waybackrust`
