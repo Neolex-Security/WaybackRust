@@ -20,7 +20,7 @@ Here is the functionalities :
 ## Usage
 
 ```
-waybackrust 0.1.1
+waybackrust 0.1.2
 Neolex <hascoet.kevin@neolex-security.fr>
 Wayback machine tool for bug bounty
 
@@ -37,7 +37,6 @@ SUBCOMMANDS:
     unify     Get the content of all archives for a given url
     urls      Get all urls for a domain
 
-
 ```
 ###### Urls command :
 ```
@@ -45,7 +44,7 @@ waybackrust-urls
 Get all urls for a domain
 
 USAGE:
-    waybackrust urls [FLAGS] <domain>
+    waybackrust urls [FLAGS] [OPTIONS] <domain>
 
 FLAGS:
     -h, --help       Prints help information
@@ -53,9 +52,11 @@ FLAGS:
     -s, --subs       Get subdomains too
     -V, --version    Prints version information
 
+OPTIONS:
+    -o, --output <FILE>    Name of the file to write the list of urls (default: print on stdout)
+
 ARGS:
     <domain>    Get urls from this domain
-
 ```
 
 ###### Robots command :
@@ -64,33 +65,35 @@ waybackrust-robots
 Get all disallowed entries from robots.txt
 
 USAGE:
-    waybackrust robots <domain>
-
-FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
-
-ARGS:
-    <domain>    Get disallowed urls from this domain
-```
-
-###### Unify command : 
-```
-waybackrust-unify 
-Get the content of all archives for a given url
-
-USAGE:
-    waybackrust unify [OPTIONS] <url>
+    waybackrust robots [OPTIONS] <domain>
 
 FLAGS:
     -h, --help       Prints help information
     -V, --version    Prints version information
 
 OPTIONS:
-    -o, --output <FILE>    name of the file to write contents of archives
+    -o, --output <FILE>    Name of the file to write the list of uniq paths (default: print on stdout)
 
 ARGS:
-    <url>    The url you want to unify
+    <domain>    Get disallowed urls from this domain
+```
+
+###### Unify command : 
+```waybackrust-unify 
+   Get the content of all archives for a given url
+   
+   USAGE:
+       waybackrust unify [OPTIONS] <url>
+   
+   FLAGS:
+       -h, --help       Prints help information
+       -V, --version    Prints version information
+   
+   OPTIONS:
+       -o, --output <FILE>    Name of the file to write contents of archives (default: print on stdout)
+   
+   ARGS:
+       <url>    The url you want to unify
 ```
 ## Ideas of new features
 If you have idea of improvement and new features in the tool please create an issue or contact me.
