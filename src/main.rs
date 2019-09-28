@@ -43,9 +43,11 @@ fn main() {
                         .short("o")
                         .long("output")
                         .value_name("FILE")
-                        .help("name of the file to write contents of archives")
+                        .help(
+                            "Name of the file to write contents of archives (default: output.txt)",
+                        )
                         .takes_value(true),
-                )
+                ),
         );
 
     let argsmatches = app.clone().get_matches();
@@ -55,7 +57,7 @@ fn main() {
         let domain = argsmatches.value_of("domain").unwrap();
         let subs = argsmatches.is_present("subs");
         let check = !argsmatches.is_present("nocheck");
-        wayback_url(domain, subs, check);
+        run_urls(domain, subs, check);
 
         return;
     }
@@ -75,7 +77,7 @@ fn main() {
     println!();
 }
 
-fn wayback_url(domain: &str, subs: bool, check: bool) {
+fn run_urls(domain: &str, subs: bool, check: bool) {
     let mut pattern = format!("{}/*", domain);
     if subs {
         pattern = format!("*.{}/*", domain);
@@ -98,31 +100,11 @@ fn wayback_url(domain: &str, subs: bool, check: bool) {
     }
 }
 
-fn http_status_urls(urls: Vec<String>) {
-    for url in urls {
-        match reqwest::get(url.as_str()) {
-            Ok(response) => println!("{} ({})", url, response.status()),
-            Err(e) => println!("error geting {} : {}", url, e),
-        }
-    }
-}
-
 fn run_robots(domain: &str) {
     let url = format!("{}/robots.txt", domain);
     let archives = get_archives(url.as_str());
+    let all_text = get_all_archives_content(archives);
 
-    let mut all_text = String::new();
-    for (timestamp, url) in archives {
-        let timestampurl = format!("https://web.archive.org/web/{}/{}", timestamp, url);
-        let response = reqwest::get(timestampurl.as_str())
-            .expect("Error GET request")
-            .text()
-            .expect("Error parsing request");
-
-        if response.contains("Disallow:") {
-            all_text.push_str(response.as_str())
-        }
-    }
     let re = Regex::new(r"/.*").unwrap();
     let paths: HashSet<&str> = re
         .find_iter(all_text.as_str())
@@ -133,6 +115,21 @@ fn run_robots(domain: &str) {
         println!("{}", path);
     }
 }
+
+fn run_unify(url: &str, output: &String) {
+    let archives = get_archives(url);
+
+    let all_text = get_all_archives_content(archives);
+    let mut file = File::create(output).expect("Error creating the file");
+    file.write_all(all_text.as_bytes())
+        .expect("Error writing content to the file");
+    println!(
+        "Content of archives that points to {} saved in {}",
+        url, output
+    );
+}
+
+
 
 fn get_archives(url: &str) -> HashMap<String, String> {
     println!("Looking for archives for {}...", url);
@@ -159,23 +156,32 @@ fn get_archives(url: &str) -> HashMap<String, String> {
     data
 }
 
-fn run_unify(url: &str, output: &String) {
-    let archives = get_archives(url);
-
+fn get_all_archives_content(archives: HashMap<String, String>) -> String {
     let mut all_text = String::new();
     for (timestamp, url) in archives {
         let timestampurl = format!("https://web.archive.org/web/{}/{}", timestamp, url);
-        let response = reqwest::get(timestampurl.as_str())
-            .expect("Error GET request")
-            .text()
-            .expect("Error parsing request");
-
-        all_text.push_str(response.as_str());
+        let response_text = match reqwest::get(timestampurl.as_str()) {
+            Ok(mut resp) => resp.text().unwrap_or("".to_string()),
+            Err(err) => {
+                eprintln!(
+                    "Error while parsing response for {} ({})",
+                    timestampurl, err
+                );
+                String::from("")
+            }
+        };
+        all_text.push_str(response_text.as_str());
     }
-    let mut file = File::create(output).expect("Error creating the file");
-    file.write_all(all_text.as_bytes())
-        .expect("Error writing content to the file");
-    println!(
-        "Content of achivres that points to {} saved in {}",url, output
-    );
+    all_text
 }
+
+
+fn http_status_urls(urls: Vec<String>) {
+    for url in urls {
+        match reqwest::get(url.as_str()) {
+            Ok(response) => println!("{} ({})", url, response.status()),
+            Err(e) => eprintln!("error geting {} : {}", url, e),
+        }
+    }
+}
+
