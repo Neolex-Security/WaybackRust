@@ -4,6 +4,7 @@ version = "0.1.1"
 authors = ["Neolex (Kevin Hascoet) <hascoet.kevin@neolex-security.fr>"]
 description = "A tool to query the WaybackMachine (https://archive.org/web/)..."
 edition = "2018"
+license = "GPL-3.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
