@@ -18,9 +18,8 @@ Here is the functionalities :
 * The executable is in : `./target/release/waybackrust`
 
 ## Usage
-
 ```
-waybackrust 0.1.2
+waybackrust 0.1.3
 Neolex <hascoet.kevin@neolex-security.fr>
 Wayback machine tool for bug bounty
 
@@ -36,7 +35,6 @@ SUBCOMMANDS:
     robots    Get all disallowed entries from robots.txt
     unify     Get the content of all archives for a given url
     urls      Get all urls for a domain
-
 ```
 ###### Urls command :
 ```
@@ -53,7 +51,8 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -o, --output <FILE>    Name of the file to write the list of urls (default: print on stdout)
+    -o, --output <FILE>                   Name of the file to write the list of urls (default: print on stdout)
+    -t, --threads <numbers of threads>    The number of threads you want. (default: 10)
 
 ARGS:
     <domain>    Get urls from this domain
@@ -72,28 +71,31 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -o, --output <FILE>    Name of the file to write the list of uniq paths (default: print on stdout)
+    -o, --output <FILE>                   Name of the file to write the list of uniq paths (default: print on stdout)
+    -t, --threads <numbers of threads>    The number of threads you want. (default: 10)
 
 ARGS:
     <domain>    Get disallowed urls from this domain
 ```
 
 ###### Unify command : 
-```waybackrust-unify 
-   Get the content of all archives for a given url
-   
-   USAGE:
-       waybackrust unify [OPTIONS] <url>
-   
-   FLAGS:
-       -h, --help       Prints help information
-       -V, --version    Prints version information
-   
-   OPTIONS:
-       -o, --output <FILE>    Name of the file to write contents of archives (default: print on stdout)
-   
-   ARGS:
-       <url>    The url you want to unify
+```
+waybackrust-unify 
+Get the content of all archives for a given url
+
+USAGE:
+    waybackrust unify [OPTIONS] <url>
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+OPTIONS:
+    -o, --output <FILE>                   Name of the file to write contents of archives (default: print on stdout)
+    -t, --threads <numbers of threads>    The number of threads you want. (default: 10)
+
+ARGS:
+    <url>    The url you want to unify
 ```
 ## Ideas of new features
 If you have idea of improvement and new features in the tool please create an issue or contact me.
