@@ -9,6 +9,12 @@ Here is the functionalities :
 
 ## Install 
 
+##### Download the statically linked binary from github releases:
+* download the static binary : `$ wget https://github.com/Neolex-Security/WaybackRust/releases/download/v0.1.3/waybackrust`
+* `$ chmod +x waybackrust`
+* `# mv waybackrust /usr/local/bin`
+* run waybackrust : `$ waybackrust `
+
 ##### from cargo (crates.io):
 `cargo install waybackrust`
 
