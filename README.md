@@ -4,8 +4,9 @@ WaybackRust
 WaybackRust is a tool written in Rust to query the [WaybackMachine](https://archive.org/web/).
 
 Here is the functionalities : 
-* Get all urls for a specific domain and get their current HTTP status codes.
-* Get all link in the robots.txt file of every snapshot in the WaybackMachine.
+* Get all urls for a specific domain and get their current HTTP status codes (urls command).
+* Get all link in the robots.txt file of every snapshot in the WaybackMachine (robots command).
+* Get the source of all archives of a specifics page (unify command).
 
 ## Install 
 
