@@ -26,7 +26,7 @@ Here is the functionalities :
 
 ## Usage
 ```
-waybackrust 0.1.3
+waybackrust 0.1.4
 Neolex <hascoet.kevin@neolex-security.fr>
 Wayback machine tool for bug bounty
 
