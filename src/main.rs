@@ -2,8 +2,10 @@ extern crate clap;
 extern crate regex;
 extern crate reqwest;
 extern crate threadpool;
+use ansi_term::Colour;
 use clap::{App, AppSettings, Arg, SubCommand};
 use regex::Regex;
+use reqwest::Response;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Write;
@@ -30,6 +32,12 @@ fn main() {
                         .short("n")
                         .long("nocheck")
                         .help("Don't check the HTTP status"),
+                )
+                .arg(
+                    Arg::with_name("nocolor")
+                        .short("p")
+                        .long("nocolor")
+                        .help("Don't colorize HTTP status"),
                 )
                 .arg(
                     Arg::with_name("output")
@@ -88,7 +96,6 @@ fn main() {
                         .help("The number of threads you want. (default: 10)")
                 ),
         );
-
     let argsmatches = app.clone().get_matches();
 
     // get all urls responses codes
@@ -99,9 +106,11 @@ fn main() {
             Some(o) => o.parse().expect("threads must be a number"),
             None => 10,
         };
+
         let subs = argsmatches.is_present("subs");
         let check = !argsmatches.is_present("nocheck");
-        run_urls(domain, subs, check, output, threads);
+        let color = !argsmatches.is_present("nocolor");
+        run_urls(domain, subs, check, output, threads, color);
 
         return;
     }
@@ -130,7 +139,14 @@ fn main() {
     }
 }
 
-fn run_urls(domain: &str, subs: bool, check: bool, output: Option<&str>, threads: usize) {
+fn run_urls(
+    domain: &str,
+    subs: bool,
+    check: bool,
+    output: Option<&str>,
+    threads: usize,
+    color: bool,
+) {
     let pattern = if subs {
         format!("*.{}/*", domain)
     } else {
@@ -148,7 +164,7 @@ fn run_urls(domain: &str, subs: bool, check: bool, output: Option<&str>, threads
         .map(|item| item.to_string())
         .collect();
     if check {
-        http_status_urls(urls, output, threads);
+        http_status_urls(urls, output, threads, color);
     } else {
         match output {
             Some(file) => {
@@ -258,7 +274,7 @@ fn get_all_archives_content(archives: HashMap<String, String>, threads: usize) -
         .to_string()
 }
 
-fn http_status_urls(urls: Vec<String>, output: Option<&str>, threads: usize) {
+fn http_status_urls(urls: Vec<String>, output: Option<&str>, threads: usize, color: bool) {
     println!("We're checking status of {} urls... ", urls.len());
 
     let pool = threadpool::Builder::new().num_threads(threads).build();
@@ -268,7 +284,11 @@ fn http_status_urls(urls: Vec<String>, output: Option<&str>, threads: usize) {
         let ret = Arc::clone(&ret);
         pool.execute(move || match reqwest::get(url.as_str()) {
             Ok(response) => {
-                let str = format!("{} ({})\n", url, response.status());
+                let str = if color {
+                    format!("{} {}\n", url, colorize(&response))
+                } else {
+                    format!("{} {}\n", url, response.status())
+                };
                 print!("{}", str);
                 ret.lock()
                     .expect("Error locking the mutex")
@@ -284,5 +304,15 @@ fn http_status_urls(urls: Vec<String>, output: Option<&str>, threads: usize) {
             file,
         );
         println!("The urls are saved to file {}", file)
+    }
+}
+
+fn colorize(response: &Response) -> String {
+    let status = response.status().to_string();
+    match status.as_ref() {
+        "200 OK" => Colour::Green.bold().paint(status).to_string(),
+        "404 Not Found" => Colour::Red.bold().paint(status).to_string(),
+        "403 Forbidden" => Colour::Purple.bold().paint(status).to_string(),
+        _ => Colour::RGB(255, 165, 0).bold().paint(status).to_string(),
     }
 }

@@ -11,7 +11,7 @@ Here is the functionalities :
 ## Install 
 
 ##### Download the statically linked binary from github releases:
-* download the static binary : `$ wget https://github.com/Neolex-Security/WaybackRust/releases/download/v0.1.3/waybackrust`
+* download the static binary : `$ wget https://github.com/Neolex-Security/WaybackRust/releases/download/v0.1.4/waybackrust`
 * `$ chmod +x waybackrust`
 * `# mv waybackrust /usr/local/bin`
 * run waybackrust : `$ waybackrust `
@@ -54,6 +54,7 @@ USAGE:
 FLAGS:
     -h, --help       Prints help information
     -n, --nocheck    Don't check the HTTP status
+    -p, --nocolor    Don't colorize HTTP status
     -s, --subs       Get subdomains too
     -V, --version    Prints version information
 
