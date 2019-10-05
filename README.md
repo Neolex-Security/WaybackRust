@@ -11,7 +11,7 @@ Here is the functionalities :
 ## Install 
 
 ##### Download the statically linked binary from github releases:
-* download the static binary : `$ wget https://github.com/Neolex-Security/WaybackRust/releases/download/v0.1.4/waybackrust`
+* download the static binary : `$ wget https://github.com/Neolex-Security/WaybackRust/releases/download/v0.1.5/waybackrust`
 * `$ chmod +x waybackrust`
 * `# mv waybackrust /usr/local/bin`
 * run waybackrust : `$ waybackrust `
@@ -26,7 +26,7 @@ Here is the functionalities :
 
 ## Usage
 ```
-waybackrust 0.1.4
+waybackrust 0.1.5
 Neolex <hascoet.kevin@neolex-security.fr>
 Wayback machine tool for bug bounty
 
@@ -42,6 +42,7 @@ SUBCOMMANDS:
     robots    Get all disallowed entries from robots.txt
     unify     Get the content of all archives for a given url
     urls      Get all urls for a domain
+
 ```
 ###### Urls command :
 ```

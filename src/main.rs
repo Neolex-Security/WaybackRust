@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex};
 fn main() {
     let app = App::new("waybackrust")
         .setting(AppSettings::ArgRequiredElseHelp)
-        .version("0.1.4")
+        .version("0.1.5")
         .author("Neolex <hascoet.kevin@neolex-security.fr>")
         .about("Wayback machine tool for bug bounty")
         .subcommand(
