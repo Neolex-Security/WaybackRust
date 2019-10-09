@@ -11,7 +11,7 @@ Here is the functionalities :
 ## Install 
 
 ##### Download the statically linked binary from github releases:
-* download the static binary : `$ wget https://github.com/Neolex-Security/WaybackRust/releases/download/v0.1.5/waybackrust`
+* download the static binary : `$ wget https://github.com/Neolex-Security/WaybackRust/releases/download/v0.1.6/waybackrust`
 * `$ chmod +x waybackrust`
 * `# mv waybackrust /usr/local/bin`
 * run waybackrust : `$ waybackrust `
@@ -26,7 +26,7 @@ Here is the functionalities :
 
 ## Usage
 ```
-waybackrust 0.1.5
+waybackrust 0.1.6
 Neolex <hascoet.kevin@neolex-security.fr>
 Wayback machine tool for bug bounty
 
@@ -56,6 +56,7 @@ FLAGS:
     -h, --help       Prints help information
     -n, --nocheck    Don't check the HTTP status
     -p, --nocolor    Don't colorize HTTP status
+        --silent     Disable informations prints
     -s, --subs       Get subdomains too
     -V, --version    Prints version information
 
@@ -65,26 +66,29 @@ OPTIONS:
 
 ARGS:
     <domain>    Get urls from this domain
+
 ```
 
 ###### Robots command :
 ```
 waybackrust-robots 
-Get all disallowed entries from robots.txt
+   Get all disallowed entries from robots.txt
+   
+   USAGE:
+       waybackrust robots [FLAGS] [OPTIONS] <domain>
+   
+   FLAGS:
+       -h, --help       Prints help information
+           --silent     Disable informations prints
+       -V, --version    Prints version information
+   
+   OPTIONS:
+       -o, --output <FILE>                   Name of the file to write the list of uniq paths (default: print on stdout)
+       -t, --threads <numbers of threads>    The number of threads you want. (default: 10)
+   
+   ARGS:
+       <domain>    Get disallowed urls from this domain
 
-USAGE:
-    waybackrust robots [OPTIONS] <domain>
-
-FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
-
-OPTIONS:
-    -o, --output <FILE>                   Name of the file to write the list of uniq paths (default: print on stdout)
-    -t, --threads <numbers of threads>    The number of threads you want. (default: 10)
-
-ARGS:
-    <domain>    Get disallowed urls from this domain
 ```
 
 ###### Unify command : 
@@ -93,10 +97,11 @@ waybackrust-unify
 Get the content of all archives for a given url
 
 USAGE:
-    waybackrust unify [OPTIONS] <url>
+    waybackrust unify [FLAGS] [OPTIONS] <url>
 
 FLAGS:
     -h, --help       Prints help information
+        --silent     Disable informations prints
     -V, --version    Prints version information
 
 OPTIONS:

@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex};
 fn main() {
     let app = App::new("waybackrust")
         .setting(AppSettings::ArgRequiredElseHelp)
-        .version("0.1.5")
+        .version("0.1.6")
         .author("Neolex <hascoet.kevin@neolex-security.fr>")
         .about("Wayback machine tool for bug bounty")
         .subcommand(
@@ -26,6 +26,11 @@ fn main() {
                         .short("s")
                         .long("subs")
                         .help("Get subdomains too"),
+                )
+                .arg(
+                    Arg::with_name("silent")
+                        .long("silent")
+                        .help("Disable informations prints"),
                 )
                 .arg(
                     Arg::with_name("nocheck")
@@ -68,6 +73,11 @@ fn main() {
                      .help("Name of the file to write the list of uniq paths (default: print on stdout)")
                       .takes_value(true))
                 .arg(
+                    Arg::with_name("silent")
+                        .long("silent")
+                        .help("Disable informations prints"),
+                )
+                .arg(
                     Arg::with_name("threads")
                         .short("t")
                         .long("threads")
@@ -87,6 +97,11 @@ fn main() {
                         .value_name("FILE")
                         .help("Name of the file to write contents of archives (default: print on stdout)")
                         .takes_value(true))
+                .arg(
+                    Arg::with_name("silent")
+                        .long("silent")
+                        .help("Disable informations prints"),
+                )
                 .arg(
                     Arg::with_name("threads")
                         .short("t")
@@ -110,7 +125,9 @@ fn main() {
         let subs = argsmatches.is_present("subs");
         let check = !argsmatches.is_present("nocheck");
         let color = !argsmatches.is_present("nocolor");
-        run_urls(domain, subs, check, output, threads, color);
+        let verbose = !argsmatches.is_present("silent");
+
+        run_urls(domain, subs, check, output, threads, color, verbose);
 
         return;
     }
@@ -123,7 +140,9 @@ fn main() {
             Some(o) => o.parse().expect("threads must be a number"),
             None => 10,
         };
-        run_robots(domain, output, threads);
+        let verbose = !argsmatches.is_present("silent");
+
+        run_robots(domain, output, threads, verbose);
         return;
     }
 
@@ -134,7 +153,9 @@ fn main() {
             Some(o) => o.parse().expect("threads must be a number"),
             None => 10,
         };
-        run_unify(url, output, threads);
+        let verbose = !argsmatches.is_present("silent");
+
+        run_unify(url, output, threads, verbose);
         return;
     }
 }
@@ -146,6 +167,7 @@ fn run_urls(
     output: Option<&str>,
     threads: usize,
     color: bool,
+    verbose: bool,
 ) {
     let pattern = if subs {
         format!("*.{}/*", domain)
@@ -164,47 +186,55 @@ fn run_urls(
         .map(|item| item.to_string())
         .collect();
     if check {
-        http_status_urls(urls, output, threads, color);
+        http_status_urls(urls, output, threads, color, verbose);
     } else {
         match output {
             Some(file) => {
                 write_string_to_file(urls.join("\n"), file);
-                println!("urls saved to {}", file);
+                if verbose {
+                    println!("urls saved to {}", file)
+                };
             }
             None => println!("{}", urls.join("\n")),
         }
     }
 }
 
-fn run_robots(domain: &str, output: Option<&str>, threads: usize) {
+fn run_robots(domain: &str, output: Option<&str>, threads: usize, verbose: bool) {
     let url = format!("{}/robots.txt", domain);
-    let archives = get_archives(url.as_str());
-    let all_text = get_all_archives_content(archives, threads);
+    let archives = get_archives(url.as_str(), verbose);
+    let all_text = get_all_archives_content(archives, threads, verbose);
 
     let re = Regex::new(r"/.*").unwrap();
     let paths: HashSet<&str> = re
         .find_iter(all_text.as_str())
         .map(|mat| mat.as_str())
         .collect();
-    println!("{} uniques paths found:", paths.len());
+    if verbose {
+        println!("{} uniques paths found:", paths.len())
+    };
 
     let paths_string = paths.into_iter().collect::<Vec<&str>>().join("\n");
     match output {
         Some(file) => {
             write_string_to_file(paths_string, file);
-            println!("urls saved to {}", file);
+            if verbose {
+                println!("urls saved to {}", file)
+            };
         }
         None => println!("{}", paths_string),
     }
 }
 
-fn run_unify(url: &str, output: Option<&str>, threads: usize) {
-    let archives = get_archives(url);
-    let all_text = get_all_archives_content(archives, threads);
+fn run_unify(url: &str, output: Option<&str>, threads: usize, verbose: bool) {
+    let archives = get_archives(url, verbose);
+    let all_text = get_all_archives_content(archives, threads, verbose);
     match output {
         Some(file) => {
             write_string_to_file(all_text, file);
-            println!("all archives contents saved to {}", file);
+            if verbose {
+                println!("all archives contents saved to {}", file)
+            };
         }
         None => println!("{}", all_text),
     }
@@ -216,8 +246,10 @@ fn write_string_to_file(string: String, filename: &str) {
         .expect("Error writing content to the file");
 }
 
-fn get_archives(url: &str) -> HashMap<String, String> {
-    println!("Looking for archives for {}...", url);
+fn get_archives(url: &str, verbose: bool) -> HashMap<String, String> {
+    if verbose {
+        println!("Looking for archives for {}...", url)
+    };
     let to_fetch= format!("https://web.archive.org/cdx/search/cdx?url={}&output=text&fl=timestamp,original&filter=statuscode:200&collapse=digest", url);
     let lines: Vec<String> = reqwest::get(to_fetch.as_str())
         .expect("Error in GET request")
@@ -240,8 +272,14 @@ fn get_archives(url: &str) -> HashMap<String, String> {
     data
 }
 
-fn get_all_archives_content(archives: HashMap<String, String>, threads: usize) -> String {
-    println!("Getting {} archives...", archives.len());
+fn get_all_archives_content(
+    archives: HashMap<String, String>,
+    threads: usize,
+    verbose: bool,
+) -> String {
+    if verbose {
+        println!("Getting {} archives...", archives.len())
+    };
     let pool = threadpool::Builder::new().num_threads(threads).build();
 
     let all_text = Arc::new(Mutex::new(String::new()));
@@ -274,8 +312,16 @@ fn get_all_archives_content(archives: HashMap<String, String>, threads: usize) -
         .to_string()
 }
 
-fn http_status_urls(urls: Vec<String>, output: Option<&str>, threads: usize, color: bool) {
-    println!("We're checking status of {} urls... ", urls.len());
+fn http_status_urls(
+    urls: Vec<String>,
+    output: Option<&str>,
+    threads: usize,
+    color: bool,
+    verbose: bool,
+) {
+    if verbose {
+        println!("We're checking status of {} urls... ", urls.len())
+    };
 
     let pool = threadpool::Builder::new().num_threads(threads).build();
 
@@ -303,7 +349,9 @@ fn http_status_urls(urls: Vec<String>, output: Option<&str>, threads: usize, col
             ret.lock().expect("Error locking the mutex").to_string(),
             file,
         );
-        println!("The urls are saved to file {}", file)
+        if verbose {
+            println!("The urls are saved to file {}", file)
+        }
     }
 }
 
