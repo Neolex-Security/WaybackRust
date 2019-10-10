@@ -10,11 +10,12 @@ use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
+use std::{time, thread};
 
 fn main() {
     let app = App::new("waybackrust")
         .setting(AppSettings::ArgRequiredElseHelp)
-        .version("0.1.6")
+        .version("0.1.7")
         .author("Neolex <hascoet.kevin@neolex-security.fr>")
         .about("Wayback machine tool for bug bounty")
         .subcommand(
@@ -37,6 +38,14 @@ fn main() {
                         .short("n")
                         .long("nocheck")
                         .help("Don't check the HTTP status"),
+                )
+                .arg(
+                    Arg::with_name("delay")
+                        .short("d")
+                        .long("delay")
+                        .help("Make a delay between each request (this stops multhreading)")
+                        .value_name("delay in milliseconds")
+                        .takes_value(true)
                 )
                 .arg(
                     Arg::with_name("nocolor")
@@ -117,7 +126,7 @@ fn main() {
     if let Some(argsmatches) = argsmatches.subcommand_matches("urls") {
         let domain = argsmatches.value_of("domain").unwrap();
         let output = Some(argsmatches.value_of("output")).unwrap_or(None);
-        let threads: usize = match argsmatches.value_of("threads") {
+        let mut threads: usize = match argsmatches.value_of("threads") {
             Some(o) => o.parse().expect("threads must be a number"),
             None => 10,
         };
@@ -126,8 +135,17 @@ fn main() {
         let check = !argsmatches.is_present("nocheck");
         let color = !argsmatches.is_present("nocolor");
         let verbose = !argsmatches.is_present("silent");
-
-        run_urls(domain, subs, check, output, threads, color, verbose);
+        let delay: u64 = match argsmatches.value_of("delay") {
+            Some(d) => d.parse().expect("delay must be a number"),
+            None => 0,
+        };
+        if delay > 0 {
+            if check == false {
+                println!("{} delay is useless when --nocheck is used.",Colour::RGB(255, 165, 0).bold().paint("Warning:").to_string());
+            }
+            threads=1;
+        }
+        run_urls(domain, subs, check, output, threads, delay, color, verbose);
 
         return;
     }
@@ -166,6 +184,7 @@ fn run_urls(
     check: bool,
     output: Option<&str>,
     threads: usize,
+    delay: u64,
     color: bool,
     verbose: bool,
 ) {
@@ -186,7 +205,7 @@ fn run_urls(
         .map(|item| item.to_string())
         .collect();
     if check {
-        http_status_urls(urls, output, threads, color, verbose);
+        http_status_urls(urls, output, threads,delay, color, verbose);
     } else {
         match output {
             Some(file) => {
@@ -316,6 +335,7 @@ fn http_status_urls(
     urls: Vec<String>,
     output: Option<&str>,
     threads: usize,
+    delay: u64,
     color: bool,
     verbose: bool,
 ) {
@@ -328,7 +348,7 @@ fn http_status_urls(
     let ret = Arc::new(Mutex::new(String::new()));
     for url in urls {
         let ret = Arc::clone(&ret);
-        pool.execute(move || match reqwest::get(url.as_str()) {
+        pool.execute(move || { thread::sleep(time::Duration::from_millis(delay)); match reqwest::get(url.as_str())  {
             Ok(response) => {
                 let str = if color {
                     format!("{} {}\n", url, colorize(&response))
@@ -341,7 +361,7 @@ fn http_status_urls(
                     .push_str(str.as_str());
             }
             Err(e) => eprintln!("error geting {} : {}", url, e),
-        });
+        }});
     }
     pool.join();
     if let Some(file) = output {
