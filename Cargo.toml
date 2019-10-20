@@ -1,6 +1,6 @@
 [package]
 name = "waybackrust"
-version = "0.1.7"
+version = "0.1.8"
 authors = ["Neolex (Kevin Hascoet) <hascoet.kevin@neolex-security.fr>"]
 description = "A tool to query the WaybackMachine (https://archive.org/web/)..."
 edition = "2018"
@@ -12,4 +12,7 @@ reqwest = "0.9.20"
 regex = "1.3.1"
 threadpool = "1.7.1"
 ansi_term = "0.12.1"
+
+
+[target.'cfg(target_arch = "x86_64-unknown-linux-musl")'.dependencies]
 openssl = { version = "0.10", features = ["vendored"] }

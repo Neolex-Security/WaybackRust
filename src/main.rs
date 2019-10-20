@@ -10,12 +10,23 @@ use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
-use std::{time, thread};
+use std::{thread, time};
+
+#[cfg(target_os = "windows")]
+fn setup_color() {
+    ansi_term::enable_ansi_support();
+}
+
+#[cfg(not(target_os = "windows"))]
+fn setup_color() {
+    // no color setup required
+}
 
 fn main() {
+    setup_color();
     let app = App::new("waybackrust")
         .setting(AppSettings::ArgRequiredElseHelp)
-        .version("0.1.7")
+        .version("0.1.8")
         .author("Neolex <hascoet.kevin@neolex-security.fr>")
         .about("Wayback machine tool for bug bounty")
         .subcommand(
@@ -140,10 +151,16 @@ fn main() {
             None => 0,
         };
         if delay > 0 {
-            if check == false {
-                println!("{} delay is useless when --nocheck is used.",Colour::RGB(255, 165, 0).bold().paint("Warning:").to_string());
+            if !check {
+                println!(
+                    "{} delay is useless when --nocheck is used.",
+                    Colour::RGB(255, 165, 0)
+                        .bold()
+                        .paint("Warning:")
+                        .to_string()
+                );
             }
-            threads=1;
+            threads = 1;
         }
         run_urls(domain, subs, check, output, threads, delay, color, verbose);
 
@@ -205,7 +222,7 @@ fn run_urls(
         .map(|item| item.to_string())
         .collect();
     if check {
-        http_status_urls(urls, output, threads,delay, color, verbose);
+        http_status_urls(urls, output, threads, delay, color, verbose);
     } else {
         match output {
             Some(file) => {
@@ -348,20 +365,23 @@ fn http_status_urls(
     let ret = Arc::new(Mutex::new(String::new()));
     for url in urls {
         let ret = Arc::clone(&ret);
-        pool.execute(move || { thread::sleep(time::Duration::from_millis(delay)); match reqwest::get(url.as_str())  {
-            Ok(response) => {
-                let str = if color {
-                    format!("{} {}\n", url, colorize(&response))
-                } else {
-                    format!("{} {}\n", url, response.status())
-                };
-                print!("{}", str);
-                ret.lock()
-                    .expect("Error locking the mutex")
-                    .push_str(str.as_str());
+        pool.execute(move || {
+            thread::sleep(time::Duration::from_millis(delay));
+            match reqwest::get(url.as_str()) {
+                Ok(response) => {
+                    let str = if color {
+                        format!("{} {}\n", url, colorize(&response))
+                    } else {
+                        format!("{} {}\n", url, response.status())
+                    };
+                    print!("{}", str);
+                    ret.lock()
+                        .expect("Error locking the mutex")
+                        .push_str(str.as_str());
+                }
+                Err(e) => eprintln!("error geting {} : {}", url, e),
             }
-            Err(e) => eprintln!("error geting {} : {}", url, e),
-        }});
+        });
     }
     pool.join();
     if let Some(file) = output {
