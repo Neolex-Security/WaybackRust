@@ -12,18 +12,10 @@ use std::io::Write;
 use std::sync::{Arc, Mutex};
 use std::{thread, time};
 
-#[cfg(target_os = "windows")]
-fn setup_color() {
-    ansi_term::enable_ansi_support();
-}
-
-#[cfg(not(target_os = "windows"))]
-fn setup_color() {
-    // no color setup required
-}
-
 fn main() {
-    setup_color();
+    #[cfg(target_os = "windows")]
+    ansi_term::enable_ansi_support();
+
     let app = App::new("waybackrust")
         .setting(AppSettings::ArgRequiredElseHelp)
         .version("0.1.8")
