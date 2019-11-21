@@ -11,7 +11,7 @@ Here is the functionalities :
 ## Install 
 
 ##### Download the statically linked binary from github releases:
-* download the static binary : `$ wget https://github.com/Neolex-Security/WaybackRust/releases/download/v0.1.8/waybackrust`
+* download the static binary : `$ wget https://github.com/Neolex-Security/WaybackRust/releases/download/v0.1.9/waybackrust`
 * `$ chmod +x waybackrust`
 * `# mv waybackrust /usr/local/bin`
 * run waybackrust : `$ waybackrust `
@@ -26,7 +26,7 @@ Here is the functionalities :
 
 ## Usage
 ```
-waybackrust 0.1.8
+waybackrust 0.1.9
 Neolex <hascoet.kevin@neolex-security.fr>
 Wayback machine tool for bug bounty
 
@@ -48,25 +48,26 @@ SUBCOMMANDS:
 ```
 waybackrust-urls 
 Get all urls for a domain
-
+                
 USAGE:
-    waybackrust urls [FLAGS] [OPTIONS] <domain>
+ waybackrust urls [FLAGS] [OPTIONS] <domain>
 
 FLAGS:
-    -h, --help       Prints help information
-    -n, --nocheck    Don't check the HTTP status
-    -p, --nocolor    Don't colorize HTTP status
-        --silent     Disable informations prints
-    -s, --subs       Get subdomains too
-    -V, --version    Prints version information
+ -h, --help       Prints help information
+ -n, --nocheck    Don't check the HTTP status
+ -p, --nocolor    Don't colorize HTTP status
+     --silent     Disable informations prints
+ -s, --subs       Get subdomains too
+ -V, --version    Prints version information
 
 OPTIONS:
-    -d, --delay <delay in milliseconds>    Make a delay between each request (this stops multhreading)
-    -o, --output <FILE>                    Name of the file to write the list of urls (default: print on stdout)
-    -t, --threads <numbers of threads>     The number of threads you want. (default: 10)
+ -b, --blacklist <extensions to blacklist>    The extensions you want to blacklist (ie: -b png,jpg,txt)
+ -d, --delay <delay in milliseconds>          Make a delay between each request (this stops multhreading)
+ -o, --output <FILE>                          Name of the file to write the list of urls (default: print on stdout)
+ -t, --threads <numbers of threads>           The number of threads you want. (default: 10)
 
 ARGS:
-    <domain>    Get urls from this domain
+ <domain>    Get urls from this domain
 
 ```
 

@@ -18,7 +18,7 @@ fn main() {
 
     let app = App::new("waybackrust")
         .setting(AppSettings::ArgRequiredElseHelp)
-        .version("0.1.8")
+        .version("0.1.9")
         .author("Neolex <hascoet.kevin@neolex-security.fr>")
         .about("Wayback machine tool for bug bounty")
         .subcommand(
@@ -73,7 +73,14 @@ fn main() {
                         .takes_value(true)
                         .value_name("numbers of threads")
                         .help("The number of threads you want. (default: 10)")
-                ),
+                ).arg(
+                    Arg::with_name("blacklist")
+                        .short("b")
+                        .long("blacklist")
+                        .takes_value(true)
+                        .value_name("extensions to blacklist")
+                        .help("The extensions you want to blacklist (ie: -b png,jpg,txt)")
+            ),
         )
         .subcommand(
             SubCommand::with_name("robots")
@@ -154,7 +161,13 @@ fn main() {
             }
             threads = 1;
         }
-        run_urls(domain, subs, check, output, threads, delay, color, verbose);
+        let blacklist: Vec<String> = match argsmatches.value_of("blacklist") {
+            Some(arg) => arg.split(',').map(|ext| [".", ext].concat()).collect(),
+            None => Vec::new(),
+        };
+        run_urls(
+            domain, subs, check, output, threads, delay, color, verbose, blacklist,
+        );
 
         return;
     }
@@ -196,6 +209,7 @@ fn run_urls(
     delay: u64,
     color: bool,
     verbose: bool,
+    blacklist: Vec<String>,
 ) {
     let pattern = if subs {
         format!("*.{}/*", domain)
@@ -212,6 +226,7 @@ fn run_urls(
         .expect("Error parsing response")
         .lines()
         .map(|item| item.to_string())
+        .filter(|file| !blacklist.iter().any(|ext| file.ends_with(ext)))
         .collect();
     if check {
         http_status_urls(urls, output, threads, delay, color, verbose);
