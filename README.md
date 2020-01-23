@@ -11,7 +11,7 @@ Here is the functionalities :
 ## Install 
 
 ##### Download the statically linked binary from github releases:
-* download the static binary : `$ wget https://github.com/Neolex-Security/WaybackRust/releases/download/v0.1.9/waybackrust`
+* download the static binary : `$ wget https://github.com/Neolex-Security/WaybackRust/releases/download/v0.1.10/waybackrust`
 * `$ chmod +x waybackrust`
 * `# mv waybackrust /usr/local/bin`
 * run waybackrust : `$ waybackrust `
@@ -26,7 +26,7 @@ Here is the functionalities :
 
 ## Usage
 ```
-waybackrust 0.1.9
+waybackrust 0.1.10
 Neolex <hascoet.kevin@neolex-security.fr>
 Wayback machine tool for bug bounty
 
@@ -48,48 +48,48 @@ SUBCOMMANDS:
 ```
 waybackrust-urls 
 Get all urls for a domain
-                
+
 USAGE:
- waybackrust urls [FLAGS] [OPTIONS] <domain>
+    waybackrust urls [FLAGS] [OPTIONS] <domain or file>
 
 FLAGS:
- -h, --help       Prints help information
- -n, --nocheck    Don't check the HTTP status
- -p, --nocolor    Don't colorize HTTP status
-     --silent     Disable informations prints
- -s, --subs       Get subdomains too
- -V, --version    Prints version information
+    -h, --help       Prints help information
+    -n, --nocheck    Don't check the HTTP status
+    -p, --nocolor    Don't colorize HTTP status
+        --silent     Disable informations prints
+    -s, --subs       Get subdomains too
+    -V, --version    Prints version information
 
 OPTIONS:
- -b, --blacklist <extensions to blacklist>    The extensions you want to blacklist (ie: -b png,jpg,txt)
- -d, --delay <delay in milliseconds>          Make a delay between each request (this stops multhreading)
- -o, --output <FILE>                          Name of the file to write the list of urls (default: print on stdout)
- -t, --threads <numbers of threads>           The number of threads you want. (default: 10)
+    -b, --blacklist <extensions to blacklist>    The extensions you want to blacklist (ie: -b png,jpg,txt)
+    -d, --delay <delay in milliseconds>          Make a delay between each request (this stops multhreading)
+    -o, --output <FILE>                          Name of the file to write the list of urls (default: print on stdout)
+    -t, --threads <numbers of threads>           The number of threads you want. (default: 10)
 
 ARGS:
- <domain>    Get urls from this domain
+    <domain or file>    domain name or file with domains
 
 ```
 
 ###### Robots command :
 ```
 waybackrust-robots 
-   Get all disallowed entries from robots.txt
-   
-   USAGE:
-       waybackrust robots [FLAGS] [OPTIONS] <domain>
-   
-   FLAGS:
-       -h, --help       Prints help information
-           --silent     Disable informations prints
-       -V, --version    Prints version information
-   
-   OPTIONS:
-       -o, --output <FILE>                   Name of the file to write the list of uniq paths (default: print on stdout)
-       -t, --threads <numbers of threads>    The number of threads you want. (default: 10)
-   
-   ARGS:
-       <domain>    Get disallowed urls from this domain
+Get all disallowed entries from robots.txt
+
+USAGE:
+    waybackrust robots [FLAGS] [OPTIONS] <domain or file>
+
+FLAGS:
+    -h, --help       Prints help information
+        --silent     Disable informations prints
+    -V, --version    Prints version information
+
+OPTIONS:
+    -o, --output <FILE>                   Name of the file to write the list of uniq paths (default: print on stdout)
+    -t, --threads <numbers of threads>    The number of threads you want. (default: 10)
+
+ARGS:
+    <domain or file>    domain name or file with domains
 
 ```
 
@@ -99,7 +99,7 @@ waybackrust-unify
 Get the content of all archives for a given url
 
 USAGE:
-    waybackrust unify [FLAGS] [OPTIONS] <url>
+    waybackrust unify [FLAGS] [OPTIONS] <url or file>
 
 FLAGS:
     -h, --help       Prints help information
@@ -111,7 +111,8 @@ OPTIONS:
     -t, --threads <numbers of threads>    The number of threads you want. (default: 10)
 
 ARGS:
-    <url>    The url you want to unify
+    <url or file>    url or file with urls
+
 ```
 ## Ideas of new features
 If you have idea of improvement and new features in the tool please create an issue or contact me.

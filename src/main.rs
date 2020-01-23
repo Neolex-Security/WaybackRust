@@ -11,6 +11,11 @@ use std::fs::File;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 use std::{thread, time};
+use std::path::Path;
+use std::error::Error;
+use std::io::prelude::*;
+
+
 
 fn main() {
     #[cfg(target_os = "windows")]
@@ -18,13 +23,17 @@ fn main() {
 
     let app = App::new("waybackrust")
         .setting(AppSettings::ArgRequiredElseHelp)
-        .version("0.1.9")
+        .version("0.1.10")
         .author("Neolex <hascoet.kevin@neolex-security.fr>")
         .about("Wayback machine tool for bug bounty")
         .subcommand(
             SubCommand::with_name("urls")
                 .about("Get all urls for a domain")
-                .arg_from_usage("<domain>       'Get urls from this domain'")
+                .arg(Arg::with_name("domain")
+                    .value_name("domain or file")
+                    .help("domain name or file with domains")
+                    .required(true)
+                    .takes_value(true))
                 .arg(
                     Arg::with_name("subs")
                         .short("s")
@@ -85,7 +94,11 @@ fn main() {
         .subcommand(
             SubCommand::with_name("robots")
                 .about("Get all disallowed entries from robots.txt")
-                .arg_from_usage("<domain>       'Get disallowed urls from this domain'")
+                .arg(Arg::with_name("domain")
+                    .value_name("domain or file")
+                    .help("domain name or file with domains")
+                    .required(true)
+                    .takes_value(true))
                 .arg(
                     Arg::with_name("output")
                      .short("o").long("output").value_name("FILE")
@@ -108,7 +121,11 @@ fn main() {
         .subcommand(
             SubCommand::with_name("unify")
                 .about("Get the content of all archives for a given url")
-                .arg_from_usage("<url>       'The url you want to unify'")
+                .arg(Arg::with_name("url")
+                    .value_name("url or file")
+                    .help("url or file with urls")
+                    .required(true)
+                    .takes_value(true))
                 .arg(
                     Arg::with_name("output")
                         .short("o")
@@ -134,7 +151,10 @@ fn main() {
 
     // get all urls responses codes
     if let Some(argsmatches) = argsmatches.subcommand_matches("urls") {
-        let domain = argsmatches.value_of("domain").unwrap();
+        let domain_or_file = argsmatches.value_of("domain").unwrap();
+
+        let domains  = get_domains(domain_or_file);
+
         let output = Some(argsmatches.value_of("output")).unwrap_or(None);
         let mut threads: usize = match argsmatches.value_of("threads") {
             Some(o) => o.parse().expect("threads must be a number"),
@@ -166,7 +186,7 @@ fn main() {
             None => Vec::new(),
         };
         run_urls(
-            domain, subs, check, output, threads, delay, color, verbose, blacklist,
+            domains, subs, check, output, threads, delay, color, verbose, blacklist,
         );
 
         return;
@@ -175,42 +195,99 @@ fn main() {
     // get all disallow robots
     if let Some(argsmatches) = argsmatches.subcommand_matches("robots") {
         let output = Some(argsmatches.value_of("output")).unwrap_or(None);
-        let domain = argsmatches.value_of("domain").unwrap();
+        let domain_or_file = argsmatches.value_of("domain").unwrap();
+
+        let domains  = get_domains(domain_or_file);
         let threads: usize = match argsmatches.value_of("threads") {
             Some(o) => o.parse().expect("threads must be a number"),
             None => 10,
         };
         let verbose = !argsmatches.is_present("silent");
 
-        run_robots(domain, output, threads, verbose);
+        run_robots(domains, output, threads, verbose);
         return;
     }
 
     if let Some(argsmatches) = argsmatches.subcommand_matches("unify") {
         let output = Some(argsmatches.value_of("output")).unwrap_or(None);
-        let url = argsmatches.value_of("url").unwrap();
+        let url_or_file = argsmatches.value_of("url").unwrap();
+
+        let urls  = get_domains(url_or_file);
         let threads: usize = match argsmatches.value_of("threads") {
             Some(o) => o.parse().expect("threads must be a number"),
             None => 10,
         };
         let verbose = !argsmatches.is_present("silent");
 
-        run_unify(url, output, threads, verbose);
+        run_unify(urls, output, threads, verbose);
         return;
     }
 }
 
-fn run_urls(
-    domain: &str,
+fn get_domains(domain_or_file: &str) -> Vec<String>  {
+
+    if Path::new(domain_or_file).exists()  {
+        let path = Path::new(domain_or_file);
+        let display = path.display();
+
+        // Open the path in read-only mode, returns `io::Result<File>`
+        let mut file = match File::open(&path) {
+            // The `description` method of `io::Error` returns a string that
+            // describes the error
+            Err(why) => panic!("couldn't open {}: {}", display,
+                               why.description()),
+            Ok(file) => file,
+        };
+
+        // Read the file contents into a     string, returns `io::Result<usize>`
+        let mut s = String::new();
+        let content : String = match file.read_to_string(&mut s) {
+            Err(why) => panic!("couldn't read {}: {}", display,
+                               why.description()),
+            Ok(_) => s
+        };
+
+        content.lines().map(String::from).collect()
+    }else {
+        vec![domain_or_file.to_string()]
+    }
+
+}
+
+fn run_urls(domains: Vec<String>,
+            subs: bool,
+            check: bool,
+            output: Option<&str>,
+            threads: usize,
+            delay: u64,
+            color: bool,
+            verbose: bool,
+            blacklist: Vec<String>){
+    let mut output_string = String::new();
+    for domain in domains{
+        output_string.push_str(run_url(domain, subs, check, threads, delay, color, verbose, blacklist.clone()).as_str());
+    }
+    match output {
+        Some(file) => {
+            write_string_to_file(output_string, file);
+            if verbose {
+                println!("urls saved to {}", file)
+            };
+        },
+        None => return
+    }
+}
+
+fn run_url(
+    domain: String,
     subs: bool,
     check: bool,
-    output: Option<&str>,
     threads: usize,
     delay: u64,
     color: bool,
     verbose: bool,
     blacklist: Vec<String>,
-) {
+) -> String {
     let pattern = if subs {
         format!("*.{}/*", domain)
     } else {
@@ -229,21 +306,29 @@ fn run_urls(
         .filter(|file| !blacklist.iter().any(|ext| file.ends_with(ext)))
         .collect();
     if check {
-        http_status_urls(urls, output, threads, delay, color, verbose);
+        http_status_urls(urls, threads, delay, color, verbose)
     } else {
-        match output {
-            Some(file) => {
-                write_string_to_file(urls.join("\n"), file);
-                if verbose {
-                    println!("urls saved to {}", file)
-                };
-            }
-            None => println!("{}", urls.join("\n")),
-        }
+        println!("{}", urls.join("\n"));
+        urls.join("\n")
     }
 }
 
-fn run_robots(domain: &str, output: Option<&str>, threads: usize, verbose: bool) {
+fn run_robots(domains: Vec<String>,output: Option<&str>,threads: usize, verbose: bool){
+    let mut output_string = String::new();
+    for domain in domains{
+        output_string.push_str(run_robot(domain,threads,  verbose).as_str());
+    }
+    match output {
+        Some(file) => {
+            write_string_to_file(output_string, file);
+            if verbose {
+                println!("urls saved to {}", file)
+            };
+        },
+        None => return
+    }
+}
+fn run_robot(domain: String, threads: usize, verbose: bool) -> String {
     let url = format!("{}/robots.txt", domain);
     let archives = get_archives(url.as_str(), verbose);
     let all_text = get_all_archives_content(archives, threads, verbose);
@@ -258,30 +343,29 @@ fn run_robots(domain: &str, output: Option<&str>, threads: usize, verbose: bool)
     };
 
     let paths_string = paths.into_iter().collect::<Vec<&str>>().join("\n");
+    println!("{}",paths_string);
+    paths_string
+}
+
+fn run_unify(urls: Vec<String>, output: Option<&str>, threads: usize, verbose: bool){
+    let mut output_string = String::new();
+    for url in urls{
+        let archives = get_archives(url.as_str(), verbose);
+        let unify_output = get_all_archives_content(archives, threads, verbose);
+        println!("{}",unify_output);
+        output_string.push_str(unify_output.as_str());
+    }
     match output {
         Some(file) => {
-            write_string_to_file(paths_string, file);
+            write_string_to_file(output_string, file);
             if verbose {
                 println!("urls saved to {}", file)
             };
-        }
-        None => println!("{}", paths_string),
+        },
+        None => return
     }
 }
 
-fn run_unify(url: &str, output: Option<&str>, threads: usize, verbose: bool) {
-    let archives = get_archives(url, verbose);
-    let all_text = get_all_archives_content(archives, threads, verbose);
-    match output {
-        Some(file) => {
-            write_string_to_file(all_text, file);
-            if verbose {
-                println!("all archives contents saved to {}", file)
-            };
-        }
-        None => println!("{}", all_text),
-    }
-}
 
 fn write_string_to_file(string: String, filename: &str) {
     let mut file = File::create(filename).expect("Error creating the file");
@@ -357,12 +441,11 @@ fn get_all_archives_content(
 
 fn http_status_urls(
     urls: Vec<String>,
-    output: Option<&str>,
     threads: usize,
     delay: u64,
     color: bool,
     verbose: bool,
-) {
+) -> String {
     if verbose {
         println!("We're checking status of {} urls... ", urls.len())
     };
@@ -371,7 +454,7 @@ fn http_status_urls(
 
     let ret = Arc::new(Mutex::new(String::new()));
     for url in urls {
-        let ret = Arc::clone(&ret);
+        let ret2 = Arc::clone(&ret);
         pool.execute(move || {
             thread::sleep(time::Duration::from_millis(delay));
             match reqwest::get(url.as_str()) {
@@ -382,7 +465,7 @@ fn http_status_urls(
                         format!("{} {}\n", url, response.status())
                     };
                     print!("{}", str);
-                    ret.lock()
+                    ret2.lock()
                         .expect("Error locking the mutex")
                         .push_str(str.as_str());
                 }
@@ -391,15 +474,7 @@ fn http_status_urls(
         });
     }
     pool.join();
-    if let Some(file) = output {
-        write_string_to_file(
-            ret.lock().expect("Error locking the mutex").to_string(),
-            file,
-        );
-        if verbose {
-            println!("The urls are saved to file {}", file)
-        }
-    }
+    ret.clone().lock().expect("Error locking the mutex").to_string()
 }
 
 fn colorize(response: &Response) -> String {
