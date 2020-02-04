@@ -11,7 +11,7 @@ Here is the functionalities :
 ## Install 
 
 ##### Download the statically linked binary from github releases:
-* download the static binary : `$ wget https://github.com/Neolex-Security/WaybackRust/releases/download/v0.1.10/waybackrust`
+* download the static binary : `$ wget https://github.com/Neolex-Security/WaybackRust/releases/download/v0.1.11/waybackrust`
 * `$ chmod +x waybackrust`
 * `# mv waybackrust /usr/local/bin`
 * run waybackrust : `$ waybackrust `
@@ -26,7 +26,7 @@ Here is the functionalities :
 
 ## Usage
 ```
-waybackrust 0.1.10
+waybackrust 0.1.11
 Neolex <hascoet.kevin@neolex-security.fr>
 Wayback machine tool for bug bounty
 
@@ -65,6 +65,7 @@ OPTIONS:
     -d, --delay <delay in milliseconds>          Make a delay between each request (this stops multhreading)
     -o, --output <FILE>                          Name of the file to write the list of urls (default: print on stdout)
     -t, --threads <numbers of threads>           The number of threads you want. (default: 10)
+    -w, --whitelist <extensions to whitelist>    The extensions you want to whitelist (ie: -w png,jpg,txt)
 
 ARGS:
     <domain or file>    domain name or file with domains

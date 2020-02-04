@@ -7,15 +7,13 @@ use clap::{App, AppSettings, Arg, SubCommand};
 use regex::Regex;
 use reqwest::Response;
 use std::collections::{HashMap, HashSet};
+use std::error::Error;
 use std::fs::File;
+use std::io::prelude::*;
 use std::io::Write;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::{thread, time};
-use std::path::Path;
-use std::error::Error;
-use std::io::prelude::*;
-
-
 
 fn main() {
     #[cfg(target_os = "windows")]
@@ -23,7 +21,7 @@ fn main() {
 
     let app = App::new("waybackrust")
         .setting(AppSettings::ArgRequiredElseHelp)
-        .version("0.1.10")
+        .version("0.1.11")
         .author("Neolex <hascoet.kevin@neolex-security.fr>")
         .about("Wayback machine tool for bug bounty")
         .subcommand(
@@ -89,6 +87,13 @@ fn main() {
                         .takes_value(true)
                         .value_name("extensions to blacklist")
                         .help("The extensions you want to blacklist (ie: -b png,jpg,txt)")
+            ).arg(
+                Arg::with_name("whitelist")
+                    .short("w")
+                    .long("whitelist")
+                    .takes_value(true)
+                    .value_name("extensions to whitelist")
+                    .help("The extensions you want to whitelist (ie: -w png,jpg,txt)")
             ),
         )
         .subcommand(
@@ -153,7 +158,7 @@ fn main() {
     if let Some(argsmatches) = argsmatches.subcommand_matches("urls") {
         let domain_or_file = argsmatches.value_of("domain").unwrap();
 
-        let domains  = get_domains(domain_or_file);
+        let domains = get_domains(domain_or_file);
 
         let output = Some(argsmatches.value_of("output")).unwrap_or(None);
         let mut threads: usize = match argsmatches.value_of("threads") {
@@ -185,8 +190,17 @@ fn main() {
             Some(arg) => arg.split(',').map(|ext| [".", ext].concat()).collect(),
             None => Vec::new(),
         };
+        let whitelist: Vec<String> = match argsmatches.value_of("whitelist") {
+            Some(arg) => arg.split(',').map(|ext| [".", ext].concat()).collect(),
+            None => Vec::new(),
+        };
+        if blacklist.len() > 0 && whitelist.len() > 0 {
+            println!(
+                "Warning: You set a blacklist and a whitelist. Only the whitelist will be used"
+            );
+        }
         run_urls(
-            domains, subs, check, output, threads, delay, color, verbose, blacklist,
+            domains, subs, check, output, threads, delay, color, verbose, blacklist, whitelist,
         );
 
         return;
@@ -197,7 +211,7 @@ fn main() {
         let output = Some(argsmatches.value_of("output")).unwrap_or(None);
         let domain_or_file = argsmatches.value_of("domain").unwrap();
 
-        let domains  = get_domains(domain_or_file);
+        let domains = get_domains(domain_or_file);
         let threads: usize = match argsmatches.value_of("threads") {
             Some(o) => o.parse().expect("threads must be a number"),
             None => 10,
@@ -212,7 +226,7 @@ fn main() {
         let output = Some(argsmatches.value_of("output")).unwrap_or(None);
         let url_or_file = argsmatches.value_of("url").unwrap();
 
-        let urls  = get_domains(url_or_file);
+        let urls = get_domains(url_or_file);
         let threads: usize = match argsmatches.value_of("threads") {
             Some(o) => o.parse().expect("threads must be a number"),
             None => 10,
@@ -224,9 +238,8 @@ fn main() {
     }
 }
 
-fn get_domains(domain_or_file: &str) -> Vec<String>  {
-
-    if Path::new(domain_or_file).exists()  {
+fn get_domains(domain_or_file: &str) -> Vec<String> {
+    if Path::new(domain_or_file).exists() {
         let path = Path::new(domain_or_file);
         let display = path.display();
 
@@ -234,38 +247,51 @@ fn get_domains(domain_or_file: &str) -> Vec<String>  {
         let mut file = match File::open(&path) {
             // The `description` method of `io::Error` returns a string that
             // describes the error
-            Err(why) => panic!("couldn't open {}: {}", display,
-                               why.description()),
+            Err(why) => panic!("couldn't open {}: {}", display, why.description()),
             Ok(file) => file,
         };
 
         // Read the file contents into a     string, returns `io::Result<usize>`
         let mut s = String::new();
-        let content : String = match file.read_to_string(&mut s) {
-            Err(why) => panic!("couldn't read {}: {}", display,
-                               why.description()),
-            Ok(_) => s
+        let content: String = match file.read_to_string(&mut s) {
+            Err(why) => panic!("couldn't read {}: {}", display, why.description()),
+            Ok(_) => s,
         };
 
         content.lines().map(String::from).collect()
-    }else {
+    } else {
         vec![domain_or_file.to_string()]
     }
-
 }
 
-fn run_urls(domains: Vec<String>,
-            subs: bool,
-            check: bool,
-            output: Option<&str>,
-            threads: usize,
-            delay: u64,
-            color: bool,
-            verbose: bool,
-            blacklist: Vec<String>){
+fn run_urls(
+    domains: Vec<String>,
+    subs: bool,
+    check: bool,
+    output: Option<&str>,
+    threads: usize,
+    delay: u64,
+    color: bool,
+    verbose: bool,
+    blacklist: Vec<String>,
+    whitelist: Vec<String>,
+) {
     let mut output_string = String::new();
-    for domain in domains{
-        output_string.push_str(run_url(domain, subs, check, threads, delay, color, verbose, blacklist.clone()).as_str());
+    for domain in domains {
+        output_string.push_str(
+            run_url(
+                domain,
+                subs,
+                check,
+                threads,
+                delay,
+                color,
+                verbose,
+                blacklist.clone(),
+                whitelist.clone(),
+            )
+            .as_str(),
+        );
     }
     match output {
         Some(file) => {
@@ -273,8 +299,8 @@ fn run_urls(domains: Vec<String>,
             if verbose {
                 println!("urls saved to {}", file)
             };
-        },
-        None => return
+        }
+        None => return,
     }
 }
 
@@ -287,6 +313,7 @@ fn run_url(
     color: bool,
     verbose: bool,
     blacklist: Vec<String>,
+    whitelist: Vec<String>,
 ) -> String {
     let pattern = if subs {
         format!("*.{}/*", domain)
@@ -297,14 +324,25 @@ fn run_url(
         "http://web.archive.org/cdx/search/cdx?url={}&output=text&fl=original&collapse=urlkey",
         pattern
     );
-    let urls: Vec<String> = reqwest::get(url.as_str())
-        .expect("Error GET request")
-        .text()
-        .expect("Error parsing response")
-        .lines()
-        .map(|item| item.to_string())
-        .filter(|file| !blacklist.iter().any(|ext| file.ends_with(ext)))
-        .collect();
+    let urls: Vec<String> = if whitelist.len() > 0 {
+        reqwest::get(url.as_str())
+            .expect("Error GET request")
+            .text()
+            .expect("Error parsing response")
+            .lines()
+            .map(|item| item.to_string())
+            .filter(|file| whitelist.iter().any(|ext| file.ends_with(ext)))
+            .collect()
+    } else {
+        reqwest::get(url.as_str())
+            .expect("Error GET request")
+            .text()
+            .expect("Error parsing response")
+            .lines()
+            .map(|item| item.to_string())
+            .filter(|file| !blacklist.iter().any(|ext| file.ends_with(ext)))
+            .collect()
+    };
     if check {
         http_status_urls(urls, threads, delay, color, verbose)
     } else {
@@ -313,10 +351,10 @@ fn run_url(
     }
 }
 
-fn run_robots(domains: Vec<String>,output: Option<&str>,threads: usize, verbose: bool){
+fn run_robots(domains: Vec<String>, output: Option<&str>, threads: usize, verbose: bool) {
     let mut output_string = String::new();
-    for domain in domains{
-        output_string.push_str(run_robot(domain,threads,  verbose).as_str());
+    for domain in domains {
+        output_string.push_str(run_robot(domain, threads, verbose).as_str());
     }
     match output {
         Some(file) => {
@@ -324,8 +362,8 @@ fn run_robots(domains: Vec<String>,output: Option<&str>,threads: usize, verbose:
             if verbose {
                 println!("urls saved to {}", file)
             };
-        },
-        None => return
+        }
+        None => return,
     }
 }
 fn run_robot(domain: String, threads: usize, verbose: bool) -> String {
@@ -343,16 +381,16 @@ fn run_robot(domain: String, threads: usize, verbose: bool) -> String {
     };
 
     let paths_string = paths.into_iter().collect::<Vec<&str>>().join("\n");
-    println!("{}",paths_string);
+    println!("{}", paths_string);
     paths_string
 }
 
-fn run_unify(urls: Vec<String>, output: Option<&str>, threads: usize, verbose: bool){
+fn run_unify(urls: Vec<String>, output: Option<&str>, threads: usize, verbose: bool) {
     let mut output_string = String::new();
-    for url in urls{
+    for url in urls {
         let archives = get_archives(url.as_str(), verbose);
         let unify_output = get_all_archives_content(archives, threads, verbose);
-        println!("{}",unify_output);
+        println!("{}", unify_output);
         output_string.push_str(unify_output.as_str());
     }
     match output {
@@ -361,11 +399,10 @@ fn run_unify(urls: Vec<String>, output: Option<&str>, threads: usize, verbose: b
             if verbose {
                 println!("urls saved to {}", file)
             };
-        },
-        None => return
+        }
+        None => return,
     }
 }
-
 
 fn write_string_to_file(string: String, filename: &str) {
     let mut file = File::create(filename).expect("Error creating the file");
@@ -474,7 +511,10 @@ fn http_status_urls(
         });
     }
     pool.join();
-    ret.clone().lock().expect("Error locking the mutex").to_string()
+    ret.clone()
+        .lock()
+        .expect("Error locking the mutex")
+        .to_string()
 }
 
 fn colorize(response: &Response) -> String {
