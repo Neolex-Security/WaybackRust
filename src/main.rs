@@ -1,12 +1,10 @@
 extern crate clap;
-extern crate regex;
 extern crate reqwest;
 extern crate threadpool;
 use ansi_term::Colour;
 use clap::{App, AppSettings, Arg, SubCommand};
-use regex::Regex;
 use reqwest::Response;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap};
 use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
@@ -369,20 +367,7 @@ fn run_robots(domains: Vec<String>, output: Option<&str>, threads: usize, verbos
 fn run_robot(domain: String, threads: usize, verbose: bool) -> String {
     let url = format!("{}/robots.txt", domain);
     let archives = get_archives(url.as_str(), verbose);
-    let all_text = get_all_archives_content(archives, threads, verbose);
-
-    let re = Regex::new(r"/.*").unwrap();
-    let paths: HashSet<&str> = re
-        .find_iter(all_text.as_str())
-        .map(|mat| mat.as_str())
-        .collect();
-    if verbose {
-        println!("{} uniques paths found:", paths.len())
-    };
-
-    let paths_string = paths.into_iter().collect::<Vec<&str>>().join("\n");
-    println!("{}", paths_string);
-    paths_string
+    get_all_archives_content(archives, threads, verbose)
 }
 
 fn run_unify(urls: Vec<String>, output: Option<&str>, threads: usize, verbose: bool) {
@@ -462,10 +447,16 @@ fn get_all_archives_content(
                     String::from("")
                 }
             };
-            all_text
-                .lock()
-                .expect("Error locking the mutex")
-                .push_str(response_text.as_str());
+            let disallowed_lines : Vec<&str> = response_text.lines().filter(|line|line.starts_with("Disallow:")).map(|s| &s[10..]).collect();
+            println!("{}",disallowed_lines.join("\n"));
+            for line in disallowed_lines {
+                if !all_text.lock().expect("Error locking the mutex").contains(line){
+                    all_text
+                        .lock()
+                        .expect("Error locking the mutex")
+                        .push_str(format!("{}\n",line).as_str());
+                }
+            }
         });
     }
     pool.join();
