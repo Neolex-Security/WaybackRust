@@ -1,25 +1,26 @@
 extern crate clap;
-extern crate reqwest;
-extern crate threadpool;
+extern crate surf;
 use ansi_term::Colour;
 use clap::{App, AppSettings, Arg, SubCommand};
-use reqwest::Response;
-use std::collections::{HashMap};
-use std::error::Error;
+use futures::future::join_all;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::Write;
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::{thread, time};
+use surf::Response;
+use tokio::sync::Mutex;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     #[cfg(target_os = "windows")]
     ansi_term::enable_ansi_support();
 
     let app = App::new("waybackrust")
         .setting(AppSettings::ArgRequiredElseHelp)
-        .version("0.1.11")
+        .version("0.2.0")
         .author("Neolex <hascoet.kevin@neolex-security.fr>")
         .about("Wayback machine tool for bug bounty")
         .subcommand(
@@ -51,7 +52,7 @@ fn main() {
                     Arg::with_name("delay")
                         .short("d")
                         .long("delay")
-                        .help("Make a delay between each request (this stops multhreading)")
+                        .help("Make a delay between each request")
                         .value_name("delay in milliseconds")
                         .takes_value(true)
                 )
@@ -70,21 +71,13 @@ fn main() {
                             "Name of the file to write the list of urls (default: print on stdout)",
                         )
                         .takes_value(true),
-                )
-                .arg(
-                    Arg::with_name("threads")
-                        .short("t")
-                        .long("threads")
-                        .takes_value(true)
-                        .value_name("numbers of threads")
-                        .help("The number of threads you want. (default: 10)")
                 ).arg(
-                    Arg::with_name("blacklist")
-                        .short("b")
-                        .long("blacklist")
-                        .takes_value(true)
-                        .value_name("extensions to blacklist")
-                        .help("The extensions you want to blacklist (ie: -b png,jpg,txt)")
+                Arg::with_name("blacklist")
+                    .short("b")
+                    .long("blacklist")
+                    .takes_value(true)
+                    .value_name("extensions to blacklist")
+                    .help("The extensions you want to blacklist (ie: -b png,jpg,txt)")
             ).arg(
                 Arg::with_name("whitelist")
                     .short("w")
@@ -104,21 +97,13 @@ fn main() {
                     .takes_value(true))
                 .arg(
                     Arg::with_name("output")
-                     .short("o").long("output").value_name("FILE")
-                     .help("Name of the file to write the list of uniq paths (default: print on stdout)")
-                      .takes_value(true))
+                        .short("o").long("output").value_name("FILE")
+                        .help("Name of the file to write the list of uniq paths (default: print on stdout)")
+                        .takes_value(true))
                 .arg(
                     Arg::with_name("silent")
                         .long("silent")
                         .help("Disable informations prints"),
-                )
-                .arg(
-                    Arg::with_name("threads")
-                        .short("t")
-                        .long("threads")
-                        .takes_value(true)
-                        .value_name("numbers of threads")
-                        .help("The number of threads you want. (default: 10)")
                 ),
         )
         .subcommand(
@@ -140,14 +125,6 @@ fn main() {
                     Arg::with_name("silent")
                         .long("silent")
                         .help("Disable informations prints"),
-                )
-                .arg(
-                    Arg::with_name("threads")
-                        .short("t")
-                        .long("threads")
-                        .takes_value(true)
-                        .value_name("numbers of threads")
-                        .help("The number of threads you want. (default: 10)")
                 ),
         );
     let argsmatches = app.clone().get_matches();
@@ -159,10 +136,6 @@ fn main() {
         let domains = get_domains(domain_or_file);
 
         let output = Some(argsmatches.value_of("output")).unwrap_or(None);
-        let mut threads: usize = match argsmatches.value_of("threads") {
-            Some(o) => o.parse().expect("threads must be a number"),
-            None => 10,
-        };
 
         let subs = argsmatches.is_present("subs");
         let check = !argsmatches.is_present("nocheck");
@@ -172,17 +145,14 @@ fn main() {
             Some(d) => d.parse().expect("delay must be a number"),
             None => 0,
         };
-        if delay > 0 {
-            if !check {
-                println!(
-                    "{} delay is useless when --nocheck is used.",
-                    Colour::RGB(255, 165, 0)
-                        .bold()
-                        .paint("Warning:")
-                        .to_string()
-                );
-            }
-            threads = 1;
+        if delay > 0 && !check {
+            println!(
+                "{} delay is useless when --nocheck is used.",
+                Colour::RGB(255, 165, 0)
+                    .bold()
+                    .paint("Warning:")
+                    .to_string()
+            );
         }
         let blacklist: Vec<String> = match argsmatches.value_of("blacklist") {
             Some(arg) => arg.split(',').map(|ext| [".", ext].concat()).collect(),
@@ -192,16 +162,15 @@ fn main() {
             Some(arg) => arg.split(',').map(|ext| [".", ext].concat()).collect(),
             None => Vec::new(),
         };
-        if blacklist.len() > 0 && whitelist.len() > 0 {
+        if !blacklist.is_empty() && !whitelist.is_empty() {
             println!(
                 "Warning: You set a blacklist and a whitelist. Only the whitelist will be used"
             );
         }
         run_urls(
-            domains, subs, check, output, threads, delay, color, verbose, blacklist, whitelist,
-        );
-
-        return;
+            domains, subs, check, output, delay, color, verbose, blacklist, whitelist,
+        )
+        .await;
     }
 
     // get all disallow robots
@@ -210,14 +179,9 @@ fn main() {
         let domain_or_file = argsmatches.value_of("domain").unwrap();
 
         let domains = get_domains(domain_or_file);
-        let threads: usize = match argsmatches.value_of("threads") {
-            Some(o) => o.parse().expect("threads must be a number"),
-            None => 10,
-        };
         let verbose = !argsmatches.is_present("silent");
 
-        run_robots(domains, output, threads, verbose);
-        return;
+        run_robots(domains, output, verbose).await;
     }
 
     if let Some(argsmatches) = argsmatches.subcommand_matches("unify") {
@@ -225,14 +189,9 @@ fn main() {
         let url_or_file = argsmatches.value_of("url").unwrap();
 
         let urls = get_domains(url_or_file);
-        let threads: usize = match argsmatches.value_of("threads") {
-            Some(o) => o.parse().expect("threads must be a number"),
-            None => 10,
-        };
         let verbose = !argsmatches.is_present("silent");
 
-        run_unify(urls, output, threads, verbose);
-        return;
+        run_unify(urls, output, verbose).await;
     }
 }
 
@@ -245,14 +204,14 @@ fn get_domains(domain_or_file: &str) -> Vec<String> {
         let mut file = match File::open(&path) {
             // The `description` method of `io::Error` returns a string that
             // describes the error
-            Err(why) => panic!("couldn't open {}: {}", display, why.description()),
+            Err(why) => panic!("couldn't open {}: {}", display, why),
             Ok(file) => file,
         };
 
         // Read the file contents into a     string, returns `io::Result<usize>`
         let mut s = String::new();
         let content: String = match file.read_to_string(&mut s) {
-            Err(why) => panic!("couldn't read {}: {}", display, why.description()),
+            Err(why) => panic!("couldn't read {}: {}", display, why),
             Ok(_) => s,
         };
 
@@ -262,51 +221,42 @@ fn get_domains(domain_or_file: &str) -> Vec<String> {
     }
 }
 
-fn run_urls(
+async fn run_urls(
     domains: Vec<String>,
     subs: bool,
     check: bool,
     output: Option<&str>,
-    threads: usize,
     delay: u64,
     color: bool,
     verbose: bool,
     blacklist: Vec<String>,
     whitelist: Vec<String>,
 ) {
-    let mut output_string = String::new();
+    let output_string: Arc<Mutex<String>> = Arc::new(Mutex::new(String::new()));
+    let mut join_handles = Vec::new();
     for domain in domains {
-        output_string.push_str(
-            run_url(
-                domain,
-                subs,
-                check,
-                threads,
-                delay,
-                color,
-                verbose,
-                blacklist.clone(),
-                whitelist.clone(),
-            )
-            .as_str(),
-        );
+        let black = blacklist.clone();
+        let white = whitelist.clone();
+        let string = Arc::clone(&output_string);
+        join_handles.push(tokio::spawn(async move {
+            let ret_url = run_url(domain, subs, check, delay, color, verbose, black, white).await;
+            string.lock().await.push_str(ret_url.as_str());
+        }));
     }
-    match output {
-        Some(file) => {
-            write_string_to_file(output_string, file);
-            if verbose {
-                println!("urls saved to {}", file)
-            };
-        }
-        None => return,
+    join_all(join_handles).await;
+
+    if let Some(file) = output {
+        write_string_to_file(output_string.lock().await.to_string(), file);
+        if verbose {
+            println!("urls saved to {}", file)
+        };
     }
 }
 
-fn run_url(
+async fn run_url(
     domain: String,
     subs: bool,
     check: bool,
-    threads: usize,
     delay: u64,
     color: bool,
     verbose: bool,
@@ -322,19 +272,23 @@ fn run_url(
         "http://web.archive.org/cdx/search/cdx?url={}&output=text&fl=original&collapse=urlkey",
         pattern
     );
-    let urls: Vec<String> = if whitelist.len() > 0 {
-        reqwest::get(url.as_str())
+    let urls: Vec<String> = if !whitelist.is_empty() {
+        surf::get(url.as_str())
+            .await
             .expect("Error GET request")
-            .text()
+            .body_string()
+            .await
             .expect("Error parsing response")
             .lines()
             .map(|item| item.to_string())
             .filter(|file| whitelist.iter().any(|ext| file.ends_with(ext)))
             .collect()
     } else {
-        reqwest::get(url.as_str())
+        surf::get(url.as_str())
+            .await
             .expect("Error GET request")
-            .text()
+            .body_string()
+            .await
             .expect("Error parsing response")
             .lines()
             .map(|item| item.to_string())
@@ -342,50 +296,44 @@ fn run_url(
             .collect()
     };
     if check {
-        http_status_urls(urls, threads, delay, color, verbose)
+        http_status_urls(urls, delay, color, verbose).await
     } else {
         println!("{}", urls.join("\n"));
         urls.join("\n")
     }
 }
 
-fn run_robots(domains: Vec<String>, output: Option<&str>, threads: usize, verbose: bool) {
+async fn run_robots(domains: Vec<String>, output: Option<&str>, verbose: bool) {
     let mut output_string = String::new();
     for domain in domains {
-        output_string.push_str(run_robot(domain, threads, verbose).as_str());
+        output_string.push_str(run_robot(domain, verbose).await.as_str());
     }
-    match output {
-        Some(file) => {
-            write_string_to_file(output_string, file);
-            if verbose {
-                println!("urls saved to {}", file)
-            };
+    if let Some(file) = output {
+        write_string_to_file(output_string, file);
+        if verbose {
+            println!("urls saved to {}", file)
         }
-        None => return,
     }
-}
-fn run_robot(domain: String, threads: usize, verbose: bool) -> String {
-    let url = format!("{}/robots.txt", domain);
-    let archives = get_archives(url.as_str(), verbose);
-    get_all_archives_content(archives, threads, verbose)
 }
 
-fn run_unify(urls: Vec<String>, output: Option<&str>, threads: usize, verbose: bool) {
+async fn run_robot(domain: String, verbose: bool) -> String {
+    let url = format!("{}/robots.txt", domain);
+    let archives = get_archives(url.as_str(), verbose).await;
+    get_all_robot_content(archives, verbose).await
+}
+
+async fn run_unify(urls: Vec<String>, output: Option<&str>, verbose: bool) {
     let mut output_string = String::new();
     for url in urls {
-        let archives = get_archives(url.as_str(), verbose);
-        let unify_output = get_all_archives_content(archives, threads, verbose);
-        println!("{}", unify_output);
+        let archives = get_archives(url.as_str(), verbose).await;
+        let unify_output = get_all_archives_content(archives, verbose).await;
         output_string.push_str(unify_output.as_str());
     }
-    match output {
-        Some(file) => {
-            write_string_to_file(output_string, file);
-            if verbose {
-                println!("urls saved to {}", file)
-            };
-        }
-        None => return,
+    if let Some(file) = output {
+        write_string_to_file(output_string, file);
+        if verbose {
+            println!("urls saved to {}", file)
+        };
     }
 }
 
@@ -395,14 +343,16 @@ fn write_string_to_file(string: String, filename: &str) {
         .expect("Error writing content to the file");
 }
 
-fn get_archives(url: &str, verbose: bool) -> HashMap<String, String> {
+async fn get_archives(url: &str, verbose: bool) -> HashMap<String, String> {
     if verbose {
         println!("Looking for archives for {}...", url)
     };
     let to_fetch= format!("https://web.archive.org/cdx/search/cdx?url={}&output=text&fl=timestamp,original&filter=statuscode:200&collapse=digest", url);
-    let lines: Vec<String> = reqwest::get(to_fetch.as_str())
+    let lines: Vec<String> = surf::get(to_fetch.as_str())
+        .await
         .expect("Error in GET request")
-        .text()
+        .body_string()
+        .await
         .expect("Error parsing response")
         .lines()
         .map(|x| x.to_owned())
@@ -411,7 +361,7 @@ fn get_archives(url: &str, verbose: bool) -> HashMap<String, String> {
     for line in lines {
         match line.split_whitespace().collect::<Vec<&str>>().as_slice() {
             [s1, s2] => {
-                data.insert(s1.to_string(), s2.to_string());
+                data.insert((*s1).to_string(), (*s2).to_string());
             }
             _ => {
                 panic!("Invalid Value for archive. line : {}", line);
@@ -421,91 +371,90 @@ fn get_archives(url: &str, verbose: bool) -> HashMap<String, String> {
     data
 }
 
-fn get_all_archives_content(
-    archives: HashMap<String, String>,
-    threads: usize,
-    verbose: bool,
-) -> String {
+async fn get_all_archives_content(archives: HashMap<String, String>, verbose: bool) -> String {
     if verbose {
         println!("Getting {} archives...", archives.len())
     };
-    let pool = threadpool::Builder::new().num_threads(threads).build();
 
-    let all_text = Arc::new(Mutex::new(String::new()));
-
+    let mut all_text = String::new();
     for (timestamp, url) in archives {
-        let all_text = Arc::clone(&all_text);
-        pool.execute(move || {
-            let timestampurl = format!("https://web.archive.org/web/{}/{}", timestamp, url);
-            let response_text = match reqwest::get(timestampurl.as_str()) {
-                Ok(mut resp) => resp.text().unwrap_or_else(|_| "".to_string()),
-                Err(err) => {
-                    eprintln!(
-                        "Error while parsing response for {} ({})",
-                        timestampurl, err
-                    );
-                    String::from("")
-                }
-            };
-            let disallowed_lines : Vec<&str> = response_text.lines().filter(|line|line.starts_with("Disallow:")).map(|s| &s[10..]).collect();
-            println!("{}",disallowed_lines.join("\n"));
-            for line in disallowed_lines {
-                if !all_text.lock().expect("Error locking the mutex").contains(line){
-                    all_text
-                        .lock()
-                        .expect("Error locking the mutex")
-                        .push_str(format!("{}\n",line).as_str());
-                }
-            }
-        });
+        let content = get_archive_content(url, timestamp).await;
+        if verbose {
+            println!("{}", content);
+        }
+        all_text.push_str(content.as_str());
     }
-    pool.join();
-    all_text
-        .clone()
-        .lock()
-        .expect("Error locking the mutex")
-        .to_string()
+
+    all_text.clone()
 }
 
-fn http_status_urls(
-    urls: Vec<String>,
-    threads: usize,
-    delay: u64,
-    color: bool,
-    verbose: bool,
-) -> String {
+async fn get_all_robot_content(archives: HashMap<String, String>, verbose: bool) -> String {
+    if verbose {
+        println!("Getting {} archives...", archives.len())
+    };
+
+    let all_text: Arc<Mutex<String>> = Arc::new(Mutex::new(String::new()));
+    for (timestamp, url) in archives {
+        let string = Arc::clone(&all_text);
+        let content_output = get_archive_content(url, timestamp).await;
+
+        let disallowed_lines: Vec<&str> = content_output
+            .lines()
+            .filter(|line| line.starts_with("Disallow:"))
+            .map(|s| &s[10..])
+            .collect();
+
+        for line in disallowed_lines {
+            if !string.lock().await.contains(line) {
+                string.lock().await.push_str(format!("{}\n", line).as_str());
+                if verbose {
+                    println!("{}", line);
+                }
+            }
+        }
+    }
+
+    all_text.clone().lock().await.to_string()
+}
+
+async fn get_archive_content(url: String, timestamp: String) -> String {
+    let timestampurl = format!("https://web.archive.org/web/{}/{}", timestamp, url);
+    match surf::get(timestampurl.as_str()).await {
+        Ok(mut resp) => resp.body_string().await.unwrap_or_else(|_| "".to_string()),
+        Err(err) => {
+            eprintln!(
+                "Error while parsing response for {} ({})",
+                timestampurl, err
+            );
+            String::from("")
+        }
+    }
+}
+
+async fn http_status_urls(urls: Vec<String>, delay: u64, color: bool, verbose: bool) -> String {
     if verbose {
         println!("We're checking status of {} urls... ", urls.len())
     };
-
-    let pool = threadpool::Builder::new().num_threads(threads).build();
-
-    let ret = Arc::new(Mutex::new(String::new()));
+    let mut ret: String = String::new();
     for url in urls {
-        let ret2 = Arc::clone(&ret);
-        pool.execute(move || {
-            thread::sleep(time::Duration::from_millis(delay));
-            match reqwest::get(url.as_str()) {
-                Ok(response) => {
-                    let str = if color {
-                        format!("{} {}\n", url, colorize(&response))
-                    } else {
-                        format!("{} {}\n", url, response.status())
-                    };
-                    print!("{}", str);
-                    ret2.lock()
-                        .expect("Error locking the mutex")
-                        .push_str(str.as_str());
-                }
-                Err(e) => eprintln!("error geting {} : {}", url, e),
+        match surf::get(url.as_str()).await {
+            Ok(response) => {
+                let str = if color {
+                    format!("{} {}\n", url, colorize(&response))
+                } else {
+                    format!("{} {}\n", url, response.status())
+                };
+                print!("{}", str);
+                ret.push_str(str.as_str());
             }
-        });
+            Err(e) => eprintln!("error geting {} : {}", url, e),
+        }
+        if delay > 0 {
+            let delay_time = time::Duration::from_millis(delay);
+            thread::sleep(delay_time);
+        }
     }
-    pool.join();
-    ret.clone()
-        .lock()
-        .expect("Error locking the mutex")
-        .to_string()
+    ret
 }
 
 fn colorize(response: &Response) -> String {
