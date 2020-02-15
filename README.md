@@ -11,7 +11,7 @@ Here is the functionalities :
 ## Install 
 
 ##### Download the statically linked binary from github releases:
-* download the static binary : `$ wget https://github.com/Neolex-Security/WaybackRust/releases/download/v0.2.0/waybackrust`
+* download the static binary : `$ wget https://github.com/Neolex-Security/WaybackRust/releases/download/v0.2.1/waybackrust`
 * `$ chmod +x waybackrust`
 * `# mv waybackrust /usr/local/bin`
 * run waybackrust : `$ waybackrust `
@@ -26,7 +26,7 @@ Here is the functionalities :
 
 ## Usage
 ```
-waybackrust 0.2.0
+waybackrust 0.2.1
 Neolex <hascoet.kevin@neolex-security.fr>
 Wayback machine tool for bug bounty
 
