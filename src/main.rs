@@ -2,7 +2,6 @@ extern crate clap;
 extern crate surf;
 use ansi_term::Colour;
 use clap::{App, AppSettings, Arg, SubCommand};
-use futures::future::join_all;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
@@ -232,21 +231,24 @@ async fn run_urls(
     blacklist: Vec<String>,
     whitelist: Vec<String>,
 ) {
-    let output_string: Arc<Mutex<String>> = Arc::new(Mutex::new(String::new()));
-    let mut join_handles = Vec::new();
+    let mut join_handles = Vec::with_capacity(domains.len());
     for domain in domains {
         let black = blacklist.clone();
         let white = whitelist.clone();
-        let string = Arc::clone(&output_string);
         join_handles.push(tokio::spawn(async move {
             let ret_url = run_url(domain, subs, check, delay, color, verbose, black, white).await;
-            string.lock().await.push_str(ret_url.as_str());
+            ret_url
         }));
     }
-    join_all(join_handles).await;
+
+    let mut output_string = String::new();
+    for handle in join_handles {
+        let ret_url = handle.await.expect("panic in run_url");
+        output_string.push_str(ret_url.as_str());
+    }
 
     if let Some(file) = output {
-        write_string_to_file(output_string.lock().await.to_string(), file);
+        write_string_to_file(output_string, file);
         if verbose {
             println!("urls saved to {}", file)
         };
