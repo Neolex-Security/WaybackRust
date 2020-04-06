@@ -7,7 +7,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::io::Write;
 use std::path::Path;
-use std::{thread, time};
+use std::{io, thread, time};
 use surf::Response;
 
 #[tokio::main]
@@ -17,14 +17,14 @@ async fn main() {
 
     let app = App::new("waybackrust")
         .setting(AppSettings::ArgRequiredElseHelp)
-        .version("0.2.1")
+        .version("0.2.2")
         .author("Neolex <hascoet.kevin@neolex-security.fr>")
         .about("Wayback machine tool for bug bounty")
         .subcommand(
             SubCommand::with_name("urls")
                 .about("Get all urls for a domain")
                 .arg(Arg::with_name("domain")
-                    .value_name("domain or file")
+                    .value_name("domain.com or file.txt or stdin")
                     .help("domain name or file with domains")
                     .required(true)
                     .takes_value(true))
@@ -88,7 +88,7 @@ async fn main() {
             SubCommand::with_name("robots")
                 .about("Get all disallowed entries from robots.txt")
                 .arg(Arg::with_name("domain")
-                    .value_name("domain or file")
+                    .value_name("domain.com or file.txt or stdin")
                     .help("domain name or file with domains")
                     .required(true)
                     .takes_value(true))
@@ -194,28 +194,38 @@ async fn main() {
 }
 
 fn get_domains(domain_or_file: &str) -> Vec<String> {
-    if Path::new(domain_or_file).exists() {
-        let path = Path::new(domain_or_file);
-        let display = path.display();
+    if domain_or_file.ne("stdin") {
+        if Path::new(domain_or_file).exists() {
+            let path = Path::new(domain_or_file);
+            let display = path.display();
 
-        // Open the path in read-only mode, returns `io::Result<File>`
-        let mut file = match File::open(&path) {
-            // The `description` method of `io::Error` returns a string that
-            // describes the error
-            Err(why) => panic!("couldn't open {}: {}", display, why),
-            Ok(file) => file,
-        };
+            // Open the path in read-only mode, returns `io::Result<File>`
+            let mut file = match File::open(&path) {
+                // The `description` method of `io::Error` returns a string that
+                // describes the error
+                Err(why) => panic!("couldn't open {}: {}", display, why),
+                Ok(file) => file,
+            };
 
-        // Read the file contents into a     string, returns `io::Result<usize>`
+            // Read the file contents into a     string, returns `io::Result<usize>`
+            let mut s = String::new();
+            let content: String = match file.read_to_string(&mut s) {
+                Err(why) => panic!("couldn't read {}: {}", display, why),
+                Ok(_) => s,
+            };
+
+            content.lines().map(String::from).collect()
+        } else {
+            vec![domain_or_file.to_string()]
+        }
+    } else {
         let mut s = String::new();
-        let content: String = match file.read_to_string(&mut s) {
-            Err(why) => panic!("couldn't read {}: {}", display, why),
+        let content: String = match io::stdin().read_to_string(&mut s) {
+            Err(why) => panic!("couldn't read stdin {}", why),
             Ok(_) => s,
         };
 
         content.lines().map(String::from).collect()
-    } else {
-        vec![domain_or_file.to_string()]
     }
 }
 
