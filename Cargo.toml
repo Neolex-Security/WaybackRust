@@ -9,9 +9,9 @@ license = "GPL-3.0"
 [dependencies]
 clap = "2.33.0"
 ansi_term = "0.12.1"
-surf = "1.0.3"
 futures = "0.3.4"
 tokio = { version = "0.2", features = ["full"] }
+reqwest = { version = "0.10", features = ["json"] }
 
 [target.'cfg(target_arch = "x86_64-unknown-linux-musl")'.dependencies]
 openssl = { version = "0.10", features = ["vendored"] }

@@ -11,7 +11,7 @@ Here is the functionalities :
 ## Install 
 
 ##### Download the statically linked binary from github releases:
-* download the static binary : `$ wget https://github.com/Neolex-Security/WaybackRust/releases/download/v0.2.2/waybackrust`
+* download the static binary : `$ wget https://github.com/Neolex-Security/WaybackRust/releases/download/v0.2.3/waybackrust`
 * `$ chmod +x waybackrust`
 * `# mv waybackrust /usr/local/bin`
 * run waybackrust : `$ waybackrust `
@@ -26,7 +26,7 @@ Here is the functionalities :
 
 ## Usage
 ```
-waybackrust 0.2.2
+waybackrust 0.2.3
 Neolex <hascoet.kevin@neolex-security.fr>
 Wayback machine tool for bug bounty
 
@@ -50,7 +50,7 @@ waybackrust-urls
 Get all urls for a domain
 
 USAGE:
-    waybackrust urls [FLAGS] [OPTIONS] <domain or file>
+    waybackrust urls [FLAGS] [OPTIONS] <domain.com or file.txt or stdin>
 
 FLAGS:
     -h, --help       Prints help information
@@ -61,14 +61,16 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -b, --blacklist <extensions to blacklist>    The extensions you want to blacklist (ie: -b png,jpg,txt)
-    -d, --delay <delay in milliseconds>          Make a delay between each request (this stops multhreading)
-    -o, --output <FILE>                          Name of the file to write the list of urls (default: print on stdout)
-    -t, --threads <numbers of threads>           The number of threads you want. (default: 10)
-    -w, --whitelist <extensions to whitelist>    The extensions you want to whitelist (ie: -w png,jpg,txt)
+    -b, --blacklist <extensions to blacklist>        The extensions you want to blacklist (ie: -b png,jpg,txt)
+    -d, --delay <delay in milliseconds>              Make a delay between each request
+    -o, --output <FILE>
+            Name of the file to write the list of urls (default: print on stdout)
+
+    -t, --threads <Number of concurrent requests>    Number of concurrent requests (default: 24)
+    -w, --whitelist <extensions to whitelist>        The extensions you want to whitelist (ie: -w png,jpg,txt)
 
 ARGS:
-    <domain or file>    domain name or file with domains
+    <domain.com or file.txt or stdin>    domain name or file with domains
 
 ```
 

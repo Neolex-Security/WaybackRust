@@ -1,5 +1,4 @@
 extern crate clap;
-extern crate surf;
 use ansi_term::Colour;
 use clap::{App, AppSettings, Arg, SubCommand};
 use std::collections::HashMap;
@@ -7,8 +6,11 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::io::Write;
 use std::path::Path;
-use std::{io, thread, time};
-use surf::Response;
+use std::{io, time};
+use reqwest::Response;
+use futures::{stream, StreamExt};
+use tokio::time::delay_for;
+
 
 #[tokio::main]
 async fn main() {
@@ -17,7 +19,7 @@ async fn main() {
 
     let app = App::new("waybackrust")
         .setting(AppSettings::ArgRequiredElseHelp)
-        .version("0.2.2")
+        .version("0.2.3")
         .author("Neolex <hascoet.kevin@neolex-security.fr>")
         .about("Wayback machine tool for bug bounty")
         .subcommand(
@@ -51,6 +53,14 @@ async fn main() {
                         .long("delay")
                         .help("Make a delay between each request")
                         .value_name("delay in milliseconds")
+                        .takes_value(true)
+                )
+                .arg(
+                    Arg::with_name("threads")
+                        .short("t")
+                        .long("threads")
+                        .help("Number of concurrent requests (default: 24)")
+                        .value_name("Number of concurrent requests")
                         .takes_value(true)
                 )
                 .arg(
@@ -143,6 +153,10 @@ async fn main() {
             Some(d) => d.parse().expect("delay must be a number"),
             None => 0,
         };
+        let workers: usize = match argsmatches.value_of("threads") {
+            Some(d) => d.parse().expect("threads must be a number"),
+            None => 24,
+        };
         if delay > 0 && !check {
             println!(
                 "{} delay is useless when --nocheck is used.",
@@ -166,7 +180,7 @@ async fn main() {
             );
         }
         run_urls(
-            domains, subs, check, output, delay, color, verbose, blacklist, whitelist,
+            domains, subs, check, output, delay, color, verbose, blacklist, whitelist,workers
         )
         .await;
     }
@@ -239,13 +253,14 @@ async fn run_urls(
     verbose: bool,
     blacklist: Vec<String>,
     whitelist: Vec<String>,
+    workers: usize
 ) {
     let mut join_handles = Vec::with_capacity(domains.len());
     for domain in domains {
         let black = blacklist.clone();
         let white = whitelist.clone();
         join_handles.push(tokio::spawn(async move {
-            run_url(domain, subs, check, delay, color, verbose, black, white).await
+            run_url(domain, subs, check, delay, color, verbose, black, white, workers).await
         }));
     }
 
@@ -272,6 +287,7 @@ async fn run_url(
     verbose: bool,
     blacklist: Vec<String>,
     whitelist: Vec<String>,
+    workers: usize
 ) -> String {
     let pattern = if subs {
         format!("*.{}/*", domain)
@@ -283,10 +299,10 @@ async fn run_url(
         pattern
     );
     let urls: Vec<String> = if !whitelist.is_empty() {
-        surf::get(url.as_str())
+        reqwest::get(url.as_str())
             .await
             .expect("Error GET request")
-            .body_string()
+            .text()
             .await
             .expect("Error parsing response")
             .lines()
@@ -294,10 +310,10 @@ async fn run_url(
             .filter(|file| whitelist.iter().any(|ext| file.ends_with(ext)))
             .collect()
     } else {
-        surf::get(url.as_str())
+        reqwest::get(url.as_str())
             .await
             .expect("Error GET request")
-            .body_string()
+            .text()
             .await
             .expect("Error parsing response")
             .lines()
@@ -306,7 +322,7 @@ async fn run_url(
             .collect()
     };
     if check {
-        http_status_urls(urls, delay, color, verbose).await
+        http_status_urls(urls, delay, color, verbose, workers).await
     } else {
         println!("{}", urls.join("\n"));
         urls.join("\n")
@@ -358,10 +374,10 @@ async fn get_archives(url: &str, verbose: bool) -> HashMap<String, String> {
         println!("Looking for archives for {}...", url)
     };
     let to_fetch= format!("https://web.archive.org/cdx/search/cdx?url={}&output=text&fl=timestamp,original&filter=statuscode:200&collapse=digest", url);
-    let lines: Vec<String> = surf::get(to_fetch.as_str())
+    let lines: Vec<String> = reqwest::get(to_fetch.as_str())
         .await
         .expect("Error in GET request")
-        .body_string()
+        .text()
         .await
         .expect("Error parsing response")
         .lines()
@@ -428,8 +444,8 @@ async fn get_all_robot_content(archives: HashMap<String, String>, verbose: bool)
 
 async fn get_archive_content(url: String, timestamp: String) -> String {
     let timestampurl = format!("https://web.archive.org/web/{}/{}", timestamp, url);
-    match surf::get(timestampurl.as_str()).await {
-        Ok(mut resp) => resp.body_string().await.unwrap_or_else(|_| "".to_string()),
+    match reqwest::get(timestampurl.as_str()).await {
+        Ok(resp) => resp.text().await.unwrap_or_else(|_| "".to_string()),
         Err(err) => {
             eprintln!(
                 "Error while parsing response for {} ({})",
@@ -440,46 +456,41 @@ async fn get_archive_content(url: String, timestamp: String) -> String {
     }
 }
 
-async fn http_status_urls(urls: Vec<String>, delay: u64, color: bool, verbose: bool) -> String {
+async fn http_status_urls(urls: Vec<String>, delay: u64, color: bool, verbose: bool, workers: usize) -> String {
     if verbose {
         println!("We're checking status of {} urls... ", urls.len())
     };
-    let mut join_handles = Vec::with_capacity(urls.len());
-    for url in urls {
-        join_handles.push(tokio::spawn(async move {
-            let status_ret = run_status(url.as_str(), color).await;
-            if delay > 0 {
-                let delay_time = time::Duration::from_millis(delay);
-                thread::sleep(delay_time);
+    let mut bodies = stream::iter(urls)
+        .map(|url| {
+            async move {
+                reqwest::get(&url).await
             }
-            status_ret
-        }));
-    }
-
+        })
+        .buffer_unordered(workers);
     let mut ret: String = String::new();
-    for handle in join_handles {
-        let ret_url: String = handle.await.expect("panic in check http status");
-        ret.push_str(ret_url.as_str());
-    }
-    ret
-}
 
-async fn run_status(url: &str, color: bool) -> String {
-    match surf::get(url).await {
-        Ok(response) => {
+    while let Some(b) = bodies.next().await {
+        match b {
+            Ok(response) => {
+                if delay > 0 {
+                    let delay_time = time::Duration::from_millis(delay);
+                    delay_for(delay_time).await;
+                }
             let str_output = if color {
-                format!("{} {}\n", url, colorize(&response))
+            format!("{} {}\n",&response.url(),colorize(&response))
             } else {
-                format!("{} {}\n", url, response.status())
+            format!("{} {}\n", &response.url(), &response.status())
             };
             print!("{}", str_output);
-            str_output
-        }
-        Err(e) => {
-            eprintln!("error geting {} : {}", url, e);
-            String::new()
+            ret.push_str(&str_output);
+            }
+            Err(e) => {
+            eprintln!("error geting : {}", e);
+            }
         }
     }
+
+    ret
 }
 
 fn colorize(response: &Response) -> String {
