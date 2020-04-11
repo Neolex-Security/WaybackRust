@@ -1,16 +1,15 @@
 extern crate clap;
 use ansi_term::Colour;
 use clap::{App, AppSettings, Arg, SubCommand};
+use futures::{stream, StreamExt};
+use reqwest::Response;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::Write;
 use std::path::Path;
 use std::{io, time};
-use reqwest::Response;
-use futures::{stream, StreamExt};
 use tokio::time::delay_for;
-
 
 #[tokio::main]
 async fn main() {
@@ -19,7 +18,7 @@ async fn main() {
 
     let app = App::new("waybackrust")
         .setting(AppSettings::ArgRequiredElseHelp)
-        .version("0.2.3")
+        .version("0.2.4")
         .author("Neolex <hascoet.kevin@neolex-security.fr>")
         .about("Wayback machine tool for bug bounty")
         .subcommand(
@@ -154,9 +153,24 @@ async fn main() {
             None => 0,
         };
         let workers: usize = match argsmatches.value_of("threads") {
-            Some(d) => d.parse().expect("threads must be a number"),
+            Some(d) => {
+                if delay > 0 {
+                    println!(
+                        "{} you set a delay and a number of threads, there  will only be one thread.",
+                        Colour::RGB(255, 165, 0)
+                            .bold()
+                            .paint("Warning:")
+                            .to_string()
+                    );
+                    0
+                }else {
+                    d.parse().expect("threads must be a number")
+                }
+            }
+            ,
             None => 24,
         };
+
         if delay > 0 && !check {
             println!(
                 "{} delay is useless when --nocheck is used.",
@@ -165,6 +179,7 @@ async fn main() {
                     .paint("Warning:")
                     .to_string()
             );
+
         }
         let blacklist: Vec<String> = match argsmatches.value_of("blacklist") {
             Some(arg) => arg.split(',').map(|ext| [".", ext].concat()).collect(),
@@ -176,11 +191,16 @@ async fn main() {
         };
         if !blacklist.is_empty() && !whitelist.is_empty() {
             println!(
-                "Warning: You set a blacklist and a whitelist. Only the whitelist will be used"
+                "{} You set a blacklist and a whitelist. Only the whitelist will be used.",
+                Colour::RGB(255, 165, 0)
+                    .bold()
+                    .paint("Warning:")
+                    .to_string()
             );
+
         }
         run_urls(
-            domains, subs, check, output, delay, color, verbose, blacklist, whitelist,workers
+            domains, subs, check, output, delay, color, verbose, blacklist, whitelist, workers,
         )
         .await;
     }
@@ -253,14 +273,17 @@ async fn run_urls(
     verbose: bool,
     blacklist: Vec<String>,
     whitelist: Vec<String>,
-    workers: usize
+    workers: usize,
 ) {
     let mut join_handles = Vec::with_capacity(domains.len());
     for domain in domains {
         let black = blacklist.clone();
         let white = whitelist.clone();
         join_handles.push(tokio::spawn(async move {
-            run_url(domain, subs, check, delay, color, verbose, black, white, workers).await
+            run_url(
+                domain, subs, check, delay, color, verbose, black, white, workers,
+            )
+            .await
         }));
     }
 
@@ -287,7 +310,7 @@ async fn run_url(
     verbose: bool,
     blacklist: Vec<String>,
     whitelist: Vec<String>,
-    workers: usize
+    workers: usize,
 ) -> String {
     let pattern = if subs {
         format!("*.{}/*", domain)
@@ -322,7 +345,12 @@ async fn run_url(
             .collect()
     };
     if check {
-        http_status_urls(urls, delay, color, verbose, workers).await
+        if delay > 0 {
+            http_status_urls_delay(urls, delay, color, verbose).await
+        }else{
+            http_status_urls_no_delay(urls, color, verbose, workers).await
+
+        }
     } else {
         println!("{}", urls.join("\n"));
         urls.join("\n")
@@ -456,36 +484,70 @@ async fn get_archive_content(url: String, timestamp: String) -> String {
     }
 }
 
-async fn http_status_urls(urls: Vec<String>, delay: u64, color: bool, verbose: bool, workers: usize) -> String {
+async fn http_status_urls_delay(
+    urls: Vec<String>,
+    delay: u64,
+    color: bool,
+    verbose: bool,
+) -> String {
+    if verbose {
+        println!("We're checking status of {} urls... ", urls.len())
+    };
+
+    let mut ret: String = String::new();
+
+   for url in urls{
+
+        match reqwest::get(&url).await {
+            Ok(response) => {
+                if delay > 0 {
+                    let delay_time = time::Duration::from_millis(delay);
+                    delay_for(delay_time).await;
+                }
+                let str_output = if color {
+                    format!("{} {}\n", &response.url(), colorize(&response))
+                } else {
+                    format!("{} {}\n", &response.url(), &response.status())
+                };
+                print!("{}", str_output);
+                ret.push_str(&str_output);
+            }
+            Err(e) => {
+                eprintln!("error geting : {}", e);
+            }
+        }
+    }
+
+    ret
+}
+
+async fn http_status_urls_no_delay(
+    urls: Vec<String>,
+    color: bool,
+    verbose: bool,
+    workers: usize,
+) -> String {
     if verbose {
         println!("We're checking status of {} urls... ", urls.len())
     };
     let mut bodies = stream::iter(urls)
-        .map(|url| {
-            async move {
-                reqwest::get(&url).await
-            }
-        })
+        .map(|url| async move { reqwest::get(&url).await })
         .buffer_unordered(workers);
     let mut ret: String = String::new();
 
     while let Some(b) = bodies.next().await {
         match b {
             Ok(response) => {
-                if delay > 0 {
-                    let delay_time = time::Duration::from_millis(delay);
-                    delay_for(delay_time).await;
-                }
-            let str_output = if color {
-            format!("{} {}\n",&response.url(),colorize(&response))
-            } else {
-            format!("{} {}\n", &response.url(), &response.status())
-            };
-            print!("{}", str_output);
-            ret.push_str(&str_output);
+                let str_output = if color {
+                    format!("{} {}\n", &response.url(), colorize(&response))
+                } else {
+                    format!("{} {}\n", &response.url(), &response.status())
+                };
+                print!("{}", str_output);
+                ret.push_str(&str_output);
             }
             Err(e) => {
-            eprintln!("error geting : {}", e);
+                eprintln!("error geting : {}", e);
             }
         }
     }
