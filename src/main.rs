@@ -15,7 +15,7 @@ use tokio::time::delay_for;
 #[tokio::main]
 async fn main() {
     #[cfg(target_os = "windows")]
-    ansi_term::enable_ansi_support().expect("ansi support failed");
+    let _ = ansi_term::enable_ansi_support();
 
     let app = App::new("waybackrust")
         .setting(AppSettings::ArgRequiredElseHelp)
