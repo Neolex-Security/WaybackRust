@@ -8,6 +8,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::io::Write;
 use std::path::Path;
+use std::process;
 use std::{io, time};
 use tokio::time::delay_for;
 
@@ -18,7 +19,7 @@ async fn main() {
 
     let app = App::new("waybackrust")
         .setting(AppSettings::ArgRequiredElseHelp)
-        .version("0.2.4")
+        .version("0.2.5")
         .author("Neolex <hascoet.kevin@neolex-security.fr>")
         .about("Wayback machine tool for bug bounty")
         .subcommand(
@@ -163,11 +164,10 @@ async fn main() {
                             .to_string()
                     );
                     0
-                }else {
+                } else {
                     d.parse().expect("threads must be a number")
                 }
             }
-            ,
             None => 24,
         };
 
@@ -179,7 +179,6 @@ async fn main() {
                     .paint("Warning:")
                     .to_string()
             );
-
         }
         let blacklist: Vec<String> = match argsmatches.value_of("blacklist") {
             Some(arg) => arg.split(',').map(|ext| [".", ext].concat()).collect(),
@@ -197,7 +196,6 @@ async fn main() {
                     .paint("Warning:")
                     .to_string()
             );
-
         }
         run_urls(
             domains, subs, check, output, delay, color, verbose, blacklist, whitelist, workers,
@@ -313,43 +311,46 @@ async fn run_url(
     workers: usize,
 ) -> String {
     let pattern = if subs {
-        format!("*.{}/*", domain)
+        format!("*.{}%2F*", domain)
     } else {
-        format!("{}/*", domain)
+        format!("{}%2F*", domain)
     };
     let url = format!(
         "http://web.archive.org/cdx/search/cdx?url={}&output=text&fl=original&collapse=urlkey",
         pattern
     );
+
+    let response = match reqwest::get(url.as_str()).await {
+        Ok(res) => res,
+        Err(e) => {
+            eprintln!("{}", e);
+            process::exit(-1)
+        }
+    };
+    let response_text = match response.text().await {
+        Ok(txt) => txt,
+        Err(e) => {
+            eprintln!("{}", e);
+            process::exit(-1)
+        }
+    };
+
+    let lines = response_text.lines().map(|item| item.to_string());
+
     let urls: Vec<String> = if !whitelist.is_empty() {
-        reqwest::get(url.as_str())
-            .await
-            .expect("Error GET request")
-            .text()
-            .await
-            .expect("Error parsing response")
-            .lines()
-            .map(|item| item.to_string())
+        lines
             .filter(|file| whitelist.iter().any(|ext| file.ends_with(ext)))
             .collect()
     } else {
-        reqwest::get(url.as_str())
-            .await
-            .expect("Error GET request")
-            .text()
-            .await
-            .expect("Error parsing response")
-            .lines()
-            .map(|item| item.to_string())
+        lines
             .filter(|file| !blacklist.iter().any(|ext| file.ends_with(ext)))
             .collect()
     };
     if check {
         if delay > 0 {
             http_status_urls_delay(urls, delay, color, verbose).await
-        }else{
+        } else {
             http_status_urls_no_delay(urls, color, verbose, workers).await
-
         }
     } else {
         println!("{}", urls.join("\n"));
@@ -452,17 +453,17 @@ async fn get_all_robot_content(archives: HashMap<String, String>, verbose: bool)
     for (timestamp, url) in archives {
         let archive_content = get_archive_content(url, timestamp).await;
 
-        let disallowed_lines: Vec<&str> = archive_content
+        let disallowed_lines: Vec<String> = archive_content
             .lines()
-            .filter(|line| line.starts_with("Disallow:"))
-            .map(|s| &s[10..])
+            .filter(|line| line.contains("low:"))
+            .map(|s| { s.replace("Disallow:","").replace("Allow:","")})
             .collect();
 
         for line in disallowed_lines {
-            if !output_string.contains(line) {
+            if !output_string.contains(&line) {
                 output_string.push_str(format!("{}\n", line).as_str());
                 if verbose {
-                    println!("{}", line);
+                    println!("{}", line.trim());
                 }
             }
         }
@@ -496,8 +497,7 @@ async fn http_status_urls_delay(
 
     let mut ret: String = String::new();
 
-   for url in urls{
-
+    for url in urls {
         match reqwest::get(&url).await {
             Ok(response) => {
                 if delay > 0 {
@@ -505,9 +505,9 @@ async fn http_status_urls_delay(
                     delay_for(delay_time).await;
                 }
                 let str_output = if color {
-                    format!("{} {}\n", &response.url(), colorize(&response))
+                    format!("{} {}\n", &url, colorize(&response))
                 } else {
-                    format!("{} {}\n", &response.url(), &response.status())
+                    format!("{} {}\n", &url, &response.status())
                 };
                 print!("{}", str_output);
                 ret.push_str(&str_output);
