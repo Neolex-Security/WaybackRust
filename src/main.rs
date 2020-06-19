@@ -456,7 +456,7 @@ async fn get_all_robot_content(archives: HashMap<String, String>, verbose: bool)
         let disallowed_lines: Vec<String> = archive_content
             .lines()
             .filter(|line| line.contains("low:"))
-            .map(|s| { s.replace("Disallow:","").replace("Allow:","")})
+            .map(|s| s.replace("Disallow:", "").replace("Allow:", ""))
             .collect();
 
         for line in disallowed_lines {
