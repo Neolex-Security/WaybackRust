@@ -19,7 +19,7 @@ async fn main() {
 
     let app = App::new("waybackrust")
         .setting(AppSettings::ArgRequiredElseHelp)
-        .version("0.2.5")
+        .version("0.2.6")
         .author("Neolex <hascoet.kevin@neolex-security.fr>")
         .about("Wayback machine tool for bug bounty")
         .subcommand(
@@ -531,17 +531,17 @@ async fn http_status_urls_no_delay(
         println!("We're checking status of {} urls... ", urls.len())
     };
     let mut bodies = stream::iter(urls)
-        .map(|url| async move { reqwest::get(&url).await })
+        .map(|url| async move { (reqwest::get(&url).await,url) })
         .buffer_unordered(workers);
     let mut ret: String = String::new();
 
     while let Some(b) = bodies.next().await {
-        match b {
+        match b.0 {
             Ok(response) => {
                 let str_output = if color {
-                    format!("{} {}\n", &response.url(), colorize(&response))
+                    format!("{} {}\n", &b.1, colorize(&response))
                 } else {
-                    format!("{} {}\n", &response.url(), &response.status())
+                    format!("{} {}\n", &b.1, &response.status())
                 };
                 print!("{}", str_output);
                 ret.push_str(&str_output);
