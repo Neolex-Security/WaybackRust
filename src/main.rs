@@ -11,7 +11,6 @@ use std::path::Path;
 use std::process;
 use std::{io, time};
 use tokio::time::delay_for;
-
 #[tokio::main]
 async fn main() {
     #[cfg(target_os = "windows")]
@@ -19,7 +18,7 @@ async fn main() {
 
     let app = App::new("waybackrust")
         .setting(AppSettings::ArgRequiredElseHelp)
-        .version("0.2.6")
+        .version("0.2.7")
         .author("Neolex <hascoet.kevin@neolex-security.fr>")
         .about("Wayback machine tool for bug bounty")
         .subcommand(
@@ -227,7 +226,7 @@ async fn main() {
 
 fn get_domains(domain_or_file: &str) -> Vec<String> {
     if domain_or_file.ne("stdin") {
-        if Path::new(domain_or_file).exists() {
+        if Path::new(domain_or_file).is_file() {
             let path = Path::new(domain_or_file);
             let display = path.display();
 
