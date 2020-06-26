@@ -2,7 +2,7 @@ extern crate clap;
 use ansi_term::Colour;
 use clap::{App, AppSettings, Arg, SubCommand};
 use futures::{stream, StreamExt};
-use reqwest::Response;
+use reqwest::{Response, Url};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
@@ -18,7 +18,7 @@ async fn main() {
 
     let app = App::new("waybackrust")
         .setting(AppSettings::ArgRequiredElseHelp)
-        .version("0.2.7")
+        .version("0.2.8")
         .author("Neolex <hascoet.kevin@neolex-security.fr>")
         .about("Wayback machine tool for bug bounty")
         .subcommand(
@@ -297,6 +297,12 @@ async fn run_urls(
         };
     }
 }
+fn get_path(url: &str) -> String {
+    match Url::parse(&url) {
+        Ok(parsed) => parsed.path().to_string(),
+        Err(_) => "".to_string(),
+    }
+}
 
 async fn run_url(
     domain: String,
@@ -338,11 +344,11 @@ async fn run_url(
 
     let urls: Vec<String> = if !whitelist.is_empty() {
         lines
-            .filter(|file| whitelist.iter().any(|ext| file.ends_with(ext)))
+            .filter(|url| whitelist.iter().any(|ext| get_path(url).ends_with(ext)))
             .collect()
     } else {
         lines
-            .filter(|file| !blacklist.iter().any(|ext| file.ends_with(ext)))
+            .filter(|url| !blacklist.iter().any(|ext| get_path(url).ends_with(ext)))
             .collect()
     };
     if check {
@@ -530,7 +536,7 @@ async fn http_status_urls_no_delay(
         println!("We're checking status of {} urls... ", urls.len())
     };
     let mut bodies = stream::iter(urls)
-        .map(|url| async move { (reqwest::get(&url).await,url) })
+        .map(|url| async move { (reqwest::get(&url).await, url) })
         .buffer_unordered(workers);
     let mut ret: String = String::new();
 
