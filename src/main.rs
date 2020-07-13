@@ -2,7 +2,7 @@ extern crate clap;
 use ansi_term::Colour;
 use clap::{App, AppSettings, Arg, SubCommand};
 use futures::{stream, StreamExt};
-use reqwest::{Response, Url};
+use reqwest::{Response, Url, redirect};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
@@ -11,6 +11,8 @@ use std::path::Path;
 use std::process;
 use std::{io, time};
 use tokio::time::delay_for;
+use reqwest::header::{LOCATION, HeaderValue};
+
 #[tokio::main]
 async fn main() {
     #[cfg(target_os = "windows")]
@@ -18,7 +20,7 @@ async fn main() {
 
     let app = App::new("waybackrust")
         .setting(AppSettings::ArgRequiredElseHelp)
-        .version("0.2.8")
+        .version("0.2.9")
         .author("Neolex <hascoet.kevin@neolex-security.fr>")
         .about("Wayback machine tool for bug bounty")
         .subcommand(
@@ -499,11 +501,12 @@ async fn http_status_urls_delay(
     if verbose {
         println!("We're checking status of {} urls... ", urls.len())
     };
-
     let mut ret: String = String::new();
 
+    let client = reqwest::ClientBuilder::new().redirect(redirect::Policy::none()).build().unwrap();
+
     for url in urls {
-        match reqwest::get(&url).await {
+        match client.get(&url).send().await {
             Ok(response) => {
                 if delay > 0 {
                     let delay_time = time::Duration::from_millis(delay);
@@ -512,8 +515,13 @@ async fn http_status_urls_delay(
                 let str_output = if color {
                     format!("{} {}\n", &url, colorize(&response))
                 } else {
-                    format!("{} {}\n", &url, &response.status())
+                    if response.status().is_redirection() {
+                        format!("{} {} to {}\n",&url,&response.status(), &response.headers().get(LOCATION).unwrap_or(&HeaderValue::from_str("").unwrap()).to_str().unwrap())
+                    }else{
+                        format!("{} {}\n", &url, &response.status())
+                    }
                 };
+
                 print!("{}", str_output);
                 ret.push_str(&str_output);
             }
@@ -535,8 +543,9 @@ async fn http_status_urls_no_delay(
     if verbose {
         println!("We're checking status of {} urls... ", urls.len())
     };
+    let client = reqwest::ClientBuilder::new().redirect(redirect::Policy::none()).build().unwrap();
     let mut bodies = stream::iter(urls)
-        .map(|url| async move { (reqwest::get(&url).await, url) })
+        .map(|url| async { (client.get(&url).send().await, url) })
         .buffer_unordered(workers);
     let mut ret: String = String::new();
 
@@ -546,7 +555,11 @@ async fn http_status_urls_no_delay(
                 let str_output = if color {
                     format!("{} {}\n", &b.1, colorize(&response))
                 } else {
-                    format!("{} {}\n", &b.1, &response.status())
+                    if response.status().is_redirection() {
+                        format!("{} {} to {}\n",&b.1,&response.status(), &response.headers().get(LOCATION).unwrap_or(&HeaderValue::from_str("").unwrap()).to_str().unwrap())
+                    }else{
+                        format!("{} {}\n", &b.1, &response.status())
+                    }
                 };
                 print!("{}", str_output);
                 ret.push_str(&str_output);
@@ -562,10 +575,16 @@ async fn http_status_urls_no_delay(
 
 fn colorize(response: &Response) -> String {
     let status = response.status().to_string();
-    match status.as_ref() {
-        "200 OK" => Colour::Green.bold().paint(status).to_string(),
-        "404 Not Found" => Colour::Red.bold().paint(status).to_string(),
-        "403 Forbidden" => Colour::Purple.bold().paint(status).to_string(),
-        _ => Colour::RGB(255, 165, 0).bold().paint(status).to_string(),
+
+    let status_col = match status.as_str() {
+        "200 OK" => Colour::Green.bold().paint(&status).to_string(),
+        "404 Not Found" => Colour::Red.bold().paint(&status).to_string(),
+        "403 Forbidden" => Colour::Purple.bold().paint(&status).to_string(),
+        _ => Colour::RGB(255, 165, 0).bold().paint(&status).to_string(),
+    };
+    if response.status().is_redirection(){
+        format!("{} to {}",status_col, &response.headers().get(LOCATION).unwrap_or(&HeaderValue::from_str("").unwrap()).to_str().unwrap())
+    }else{
+        format!("{}",status_col)
     }
 }
