@@ -20,7 +20,7 @@ async fn main() {
 
     let app = App::new("waybackrust")
         .setting(AppSettings::ArgRequiredElseHelp)
-        .version("0.2.10")
+        .version("0.2.11")
         .author("Neolex <hascoet.kevin@neolex-security.fr>")
         .about("Wayback machine tool for bug bounty")
         .subcommand(
@@ -93,6 +93,22 @@ async fn main() {
                     .takes_value(true)
                     .value_name("extensions to whitelist")
                     .help("The extensions you want to whitelist (ie: -w png,jpg,txt)")
+            ).arg(
+                Arg::with_name("blacklist code")
+                    .short("z")
+                    .long("blacklist-code")
+                    .takes_value
+                    (true)
+                    .value_name("codes to blacklist")
+                    .help("The status codes you want to blacklist (ie: --blacklist-code 404,403,500)")
+            ).arg(
+                Arg::with_name("whitelist code")
+                    .short("c")
+                    .long("whitelist-code")
+                    .takes_value
+                    (true)
+                    .value_name("codes to whitelist")
+                    .help("The status codes you want to blacklist (ie: --whitelist-code 404,403,500)")
             )
         )
         .subcommand(
@@ -185,6 +201,14 @@ async fn main() {
             Some(arg) => arg.split(',').map(|ext| [".", ext].concat()).collect(),
             None => Vec::new(),
         };
+        let blacklist_code: Vec<u16> = match argsmatches.value_of("blacklist code" ) {
+            Some(arg) => arg.split(',').map(|code| code.parse::<u16>().unwrap()).collect::<Vec<u16>>(),
+            None => Vec::new(),
+        };
+        let whitelist_code: Vec<u16> = match argsmatches.value_of("whitelist code" ) {
+            Some(arg) => arg.split(',').map(|code| code.parse::<u16>().unwrap()).collect::<Vec<u16>>(),
+            None => Vec::new(),
+        };
         let whitelist: Vec<String> = match argsmatches.value_of("whitelist") {
             Some(arg) => arg.split(',').map(|ext| [".", ext].concat()).collect(),
             None => Vec::new(),
@@ -199,7 +223,7 @@ async fn main() {
             );
         }
         run_urls(
-            domains, subs, check, output, delay, color, verbose, blacklist, whitelist, workers,
+            domains, subs, check, output, delay, color, verbose, blacklist, whitelist, workers,blacklist_code,whitelist_code
         )
         .await;
     }
@@ -273,14 +297,18 @@ async fn run_urls(
     blacklist: Vec<String>,
     whitelist: Vec<String>,
     workers: usize,
+    blacklist_code: Vec<u16>,
+    whitelist_code: Vec<u16>
 ) {
     let mut join_handles = Vec::with_capacity(domains.len());
     for domain in domains {
         let black = blacklist.clone();
         let white = whitelist.clone();
+        let blacklist_code = blacklist_code.clone();
+        let whitelist_code = whitelist_code.clone();
         join_handles.push(tokio::spawn(async move {
             run_url(
-                domain, subs, check, delay, color, verbose, black, white, workers,
+                domain, subs, check, delay, color, verbose, black, white, workers,blacklist_code,whitelist_code
             )
             .await
         }));
@@ -316,6 +344,8 @@ async fn run_url(
     blacklist: Vec<String>,
     whitelist: Vec<String>,
     workers: usize,
+    blacklist_code: Vec<u16>,
+    whitelist_code: Vec<u16>
 ) -> String {
     let pattern = if subs {
         format!("*.{}%2F*", domain)
@@ -355,9 +385,9 @@ async fn run_url(
     };
     if check {
         if delay > 0 {
-            http_status_urls_delay(urls, delay, color, verbose).await
+            http_status_urls_delay(urls, delay, color, verbose, blacklist_code,whitelist_code).await
         } else {
-            http_status_urls_no_delay(urls, color, verbose, workers).await
+            http_status_urls_no_delay(urls, color, verbose, workers, blacklist_code,whitelist_code).await
         }
     } else {
         println!("{}", urls.join("\n"));
@@ -497,6 +527,8 @@ async fn http_status_urls_delay(
     delay: u64,
     color: bool,
     verbose: bool,
+    blacklist_code: Vec<u16>,
+    whitelist_code: Vec<u16>
 ) -> String {
     if verbose {
         println!("We're checking status of {} urls... ", urls.len())
@@ -515,26 +547,30 @@ async fn http_status_urls_delay(
                     let delay_time = time::Duration::from_millis(delay);
                     delay_for(delay_time).await;
                 }
-                let str_output = if color {
-                    format!("{} {}\n", &url, colorize(&response))
-                } else if response.status().is_redirection() {
-                    format!(
-                        "{} {} to {}\n",
-                        &url,
-                        &response.status(),
-                        &response
-                            .headers()
-                            .get(LOCATION)
-                            .unwrap_or(&HeaderValue::from_str("").unwrap())
-                            .to_str()
-                            .unwrap()
-                    )
-                } else {
-                    format!("{} {}\n", &url, &response.status())
-                };
+                if whitelist_code.is_empty() || (&whitelist_code).into_iter().any(|code| *code == response.status().as_u16()) {
+                    if !(&blacklist_code).into_iter().any(|code| *code == response.status().as_u16()) {
+                        let str_output = if color {
+                            format!("{} {}\n", &url, colorize(&response))
+                        } else if response.status().is_redirection() {
+                            format!(
+                                "{} {} to {}\n",
+                                &url,
+                                &response.status(),
+                                &response
+                                    .headers()
+                                    .get(LOCATION)
+                                    .unwrap_or(&HeaderValue::from_str("").unwrap())
+                                    .to_str()
+                                    .unwrap()
+                            )
+                        } else {
+                            format!("{} {}\n", &url, &response.status())
+                        };
 
-                print!("{}", str_output);
-                ret.push_str(&str_output);
+                        print!("{}", str_output);
+                        ret.push_str(&str_output);
+                    }
+                }
             }
             Err(e) => {
                 eprintln!("error geting : {}", e);
@@ -550,6 +586,8 @@ async fn http_status_urls_no_delay(
     color: bool,
     verbose: bool,
     workers: usize,
+    blacklist_code: Vec<u16>,
+    whitelist_code: Vec<u16>
 ) -> String {
     if verbose {
         println!("We're checking status of {} urls... ", urls.len())
@@ -566,25 +604,29 @@ async fn http_status_urls_no_delay(
     while let Some(b) = bodies.next().await {
         match b.0 {
             Ok(response) => {
-                let str_output = if color {
-                    format!("{} {}\n", &b.1, colorize(&response))
-                } else if response.status().is_redirection() {
-                    format!(
-                        "{} {} to {}\n",
-                        &b.1,
-                        &response.status(),
-                        &response
-                            .headers()
-                            .get(LOCATION)
-                            .unwrap_or(&HeaderValue::from_str("").unwrap())
-                            .to_str()
-                            .unwrap()
-                    )
-                } else {
-                    format!("{} {}\n", &b.1, &response.status())
-                };
-                print!("{}", str_output);
-                ret.push_str(&str_output);
+                if whitelist_code.is_empty() || (&whitelist_code).into_iter().any(|code| *code == response.status().as_u16()) {
+                    if !(&blacklist_code).into_iter().any(|code| *code == response.status().as_u16()) {
+                        let str_output = if color {
+                            format!("{} {}\n", &b.1, colorize(&response))
+                        } else if response.status().is_redirection() {
+                            format!(
+                                "{} {} to {}\n",
+                                &b.1,
+                                &response.status(),
+                                &response
+                                    .headers()
+                                    .get(LOCATION)
+                                    .unwrap_or(&HeaderValue::from_str("").unwrap())
+                                    .to_str()
+                                    .unwrap()
+                            )
+                        } else {
+                            format!("{} {}\n", &b.1, &response.status())
+                        };
+                        print!("{}", str_output);
+                        ret.push_str(&str_output);
+                    }
+                }
             }
             Err(e) => {
                 eprintln!("error geting : {}", e);
