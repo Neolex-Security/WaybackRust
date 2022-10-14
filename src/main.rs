@@ -10,8 +10,7 @@ use std::io::prelude::*;
 use std::io::Write;
 use std::path::Path;
 use std::process;
-use std::{io, time};
-use tokio::time::delay_for;
+use std::{io, time};use tokio::time::sleep;
 
 #[tokio::main]
 async fn main() {
@@ -545,7 +544,7 @@ async fn http_status_urls_delay(
             Ok(response) => {
                 if delay > 0 {
                     let delay_time = time::Duration::from_millis(delay);
-                    delay_for(delay_time).await;
+                    sleep(delay_time).await;
                 }
                 if whitelist_code.is_empty() || (&whitelist_code).into_iter().any(|code| *code == response.status().as_u16()) {
                     if !(&blacklist_code).into_iter().any(|code| *code == response.status().as_u16()) {
