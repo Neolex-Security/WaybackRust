@@ -1,6 +1,6 @@
 extern crate clap;
 use ansi_term::Colour;
-use clap::{App, AppSettings, Arg, SubCommand};
+use clap::{Arg, Command};
 use futures::{stream, StreamExt};
 use reqwest::header::{HeaderValue, LOCATION};
 use reqwest::{redirect, Response, Url};
@@ -17,161 +17,146 @@ async fn main() {
     #[cfg(target_os = "windows")]
     let _ = ansi_term::enable_ansi_support();
 
-    let app = App::new("waybackrust")
-        .setting(AppSettings::ArgRequiredElseHelp)
+    let argsmatches = Command::new("waybackrust")
         .version("0.2.11")
         .author("Neolex <hascoet.kevin@neolex-security.fr>")
         .about("Wayback machine tool for bug bounty")
         .subcommand(
-            SubCommand::with_name("urls")
+            Command::new("urls")
                 .about("Get all urls for a domain")
-                .arg(Arg::with_name("domain")
+                .arg(Arg::new("domain")
                     .value_name("domain.com or file.txt or stdin")
                     .help("domain name or file with domains")
-                    .required(true)
-                    .takes_value(true))
+                    .required(true))
                 .arg(
-                    Arg::with_name("subs")
-                        .short("s")
+                    Arg::new("subs")
+                        .short('s')
                         .long("subs")
-                        .help("Get subdomains too"),
+                        .help("Get subdomains too")
+                        .action(clap::ArgAction::SetFalse),
                 )
                 .arg(
-                    Arg::with_name("silent")
+                    Arg::new("silent")
                         .long("silent")
-                        .help("Disable informations prints"),
+                        .help("Disable informations prints")
+                        .action(clap::ArgAction::SetFalse),
                 )
                 .arg(
-                    Arg::with_name("nocheck")
-                        .short("n")
+                    Arg::new("nocheck")
+                        .short('n')
                         .long("nocheck")
-                        .help("Don't check the HTTP status"),
+                        .help("Don't check the HTTP status")
+                        .action(clap::ArgAction::SetFalse),
                 )
                 .arg(
-                    Arg::with_name("delay")
-                        .short("d")
+                    Arg::new("delay")
+                        .short('d')
                         .long("delay")
                         .help("Make a delay between each request")
                         .value_name("delay in milliseconds")
-                        .takes_value(true)
                 )
                 .arg(
-                    Arg::with_name("threads")
-                        .short("t")
+                    Arg::new("threads")
+                        .short('t')
                         .long("threads")
                         .help("Number of concurrent requests (default: 24)")
                         .value_name("Number of concurrent requests")
-                        .takes_value(true)
                 )
                 .arg(
-                    Arg::with_name("nocolor")
-                        .short("p")
+                    Arg::new("nocolor")
+                        .short('p')
                         .long("nocolor")
-                        .help("Don't colorize HTTP status"),
+                        .help("Don't colorize HTTP status")
+                        .action(clap::ArgAction::SetFalse),
                 )
                 .arg(
-                    Arg::with_name("output")
-                        .short("o")
-                        .long("output")
+                    Arg::new("output_file")
+                        .short('o')
+                        .long("output-file")
                         .value_name("FILE")
                         .help(
                             "Name of the file to write the list of urls (default: print on stdout)",
                         )
-                        .takes_value(true),
                 ).arg(
-                Arg::with_name("blacklist")
-                    .short("b")
+                Arg::new("blacklist")
+                    .short('b')
                     .long("blacklist")
-                    .takes_value(true)
                     .value_name("extensions to blacklist")
                     .help("The extensions you want to blacklist (ie: -b png,jpg,txt)")
             ).arg(
-                Arg::with_name("whitelist")
-                    .short("w")
+                Arg::new("whitelist")
+                    .short('w')
                     .long("whitelist")
-                    .takes_value(true)
                     .value_name("extensions to whitelist")
                     .help("The extensions you want to whitelist (ie: -w png,jpg,txt)")
             ).arg(
-                Arg::with_name("blacklist code")
-                    .short("z")
+                Arg::new("blacklist code")
+                    .short('z')
                     .long("blacklist-code")
-                    .takes_value
-                    (true)
                     .value_name("codes to blacklist")
                     .help("The status codes you want to blacklist (ie: --blacklist-code 404,403,500)")
             ).arg(
-                Arg::with_name("whitelist code")
-                    .short("c")
+                Arg::new("whitelist code")
+                    .short('c')
                     .long("whitelist-code")
-                    .takes_value
-                    (true)
                     .value_name("codes to whitelist")
                     .help("The status codes you want to blacklist (ie: --whitelist-code 404,403,500)")
             )
         )
         .subcommand(
-            SubCommand::with_name("robots")
+            Command::new("robots")
                 .about("Get all disallowed entries from robots.txt")
-                .arg(Arg::with_name("domain")
+                .arg(Arg::new("domain")
                     .value_name("domain.com or file.txt or stdin")
                     .help("domain name or file with domains")
-                    .required(true)
-                    .takes_value(true))
+                    .required(true))
                 .arg(
-                    Arg::with_name("output")
-                        .short("o").long("output").value_name("FILE")
-                        .help("Name of the file to write the list of uniq paths (default: print on stdout)")
-                        .takes_value(true))
+                    Arg::new("output_file")
+                        .short('o').long("output-file").value_name("FILE")
+                        .help("Name of the file to write the list of uniq paths (default: print on stdout)"))
                 .arg(
-                    Arg::with_name("silent")
+                    Arg::new("silent")
                         .long("silent")
-                        .help("Disable informations prints"),
+                        .help("Disable informations prints")
+                        .action(clap::ArgAction::SetFalse),
                 ),
         )
         .subcommand(
-            SubCommand::with_name("unify")
+            Command::new("unify")
                 .about("Get the content of all archives for a given url")
-                .arg(Arg::with_name("url")
+                .arg(Arg::new("url")
                     .value_name("url or file")
                     .help("url or file with urls")
-                    .required(true)
-                    .takes_value(true))
+                    .required(true))
                 .arg(
-                    Arg::with_name("output")
-                        .short("o")
-                        .long("output")
+                    Arg::new("output_file")
+                        .short('o')
+                        .long("output-file")
                         .value_name("FILE")
-                        .help("Name of the file to write contents of archives (default: print on stdout)")
-                        .takes_value(true))
+                        .help("Name of the file to write contents of archives (default: print on stdout)"))
                 .arg(
-                    Arg::with_name("silent")
+                    Arg::new("silent")
                         .long("silent")
                         .help("Disable informations prints"),
                 ),
-        );
-    let argsmatches = app.clone().get_matches();
-
+        ).get_matches();
     // get all urls responses codes
     if let Some(argsmatches) = argsmatches.subcommand_matches("urls") {
-        let domain_or_file = argsmatches.value_of("domain").unwrap();
+        let domain_or_file = argsmatches.get_one::<String>("domain").unwrap();
 
         let domains = get_domains(domain_or_file);
 
-        let output = Some(argsmatches.value_of("output")).unwrap_or(None);
+        let output_file = argsmatches.get_one::<String>("output_file");
 
-        let subs = argsmatches.is_present("subs");
-        let check = !argsmatches.is_present("nocheck");
+        let subs = argsmatches.get_flag("subs");
+        let check = !argsmatches.get_flag("nocheck");
 
-        let color = !argsmatches.is_present("nocolor");
-        let verbose = !argsmatches.is_present("silent");
-        let delay: u64 = match argsmatches.value_of("delay") {
-            Some(d) => d.parse().expect("delay must be a number"),
-            None => 0,
-        };
-        let workers: usize = match argsmatches.value_of("threads") {
+        let color = !argsmatches.get_flag("nocolor");
+        let verbose = !argsmatches.get_flag("silent");
+        let delay = argsmatches.get_one::<u64>("delay").unwrap_or(&0);
+        let workers = match argsmatches.get_one::<usize>("threads") {
             Some(d) => {
-                if delay > 0 {
+                if delay > &0 {
                     println!(
                         "{} you set a delay and a number of threads, there  will only be one thread.",
                         Colour::RGB(255, 165, 0)
@@ -179,15 +164,15 @@ async fn main() {
                             .paint("Warning:")
                             .to_string()
                     );
-                    0
+                    &0
                 } else {
-                    d.parse().expect("threads must be a number")
+                    d
                 }
             }
-            None => 24,
+            None => &24,
         };
 
-        if delay > 0 && !check {
+        if delay > &0 && !check {
             println!(
                 "{} delay is useless when --nocheck is used.",
                 Colour::RGB(255, 165, 0)
@@ -196,19 +181,19 @@ async fn main() {
                     .to_string()
             );
         }
-        let blacklist: Vec<String> = match argsmatches.value_of("blacklist") {
+        let blacklist: Vec<String> = match argsmatches.get_one::<String>("blacklist") {
             Some(arg) => arg.split(',').map(|ext| [".", ext].concat()).collect(),
             None => Vec::new(),
         };
-        let blacklist_code: Vec<u16> = match argsmatches.value_of("blacklist code" ) {
+        let blacklist_code: Vec<u16> = match argsmatches.get_one::<String>("blacklist code" ) {
             Some(arg) => arg.split(',').map(|code| code.parse::<u16>().unwrap()).collect::<Vec<u16>>(),
             None => Vec::new(),
         };
-        let whitelist_code: Vec<u16> = match argsmatches.value_of("whitelist code" ) {
+        let whitelist_code: Vec<u16> = match argsmatches.get_one::<String>("whitelist code" ) {
             Some(arg) => arg.split(',').map(|code| code.parse::<u16>().unwrap()).collect::<Vec<u16>>(),
             None => Vec::new(),
         };
-        let whitelist: Vec<String> = match argsmatches.value_of("whitelist") {
+        let whitelist: Vec<String> = match argsmatches.get_one::<String>("whitelist") {
             Some(arg) => arg.split(',').map(|ext| [".", ext].concat()).collect(),
             None => Vec::new(),
         };
@@ -222,34 +207,33 @@ async fn main() {
             );
         }
         run_urls(
-            domains, subs, check, output, delay, color, verbose, blacklist, whitelist, workers,blacklist_code,whitelist_code
+            domains, subs, check, output_file, *delay, color, verbose, blacklist, whitelist, *workers,blacklist_code,whitelist_code
         )
         .await;
     }
 
     // get all disallow robots
     if let Some(argsmatches) = argsmatches.subcommand_matches("robots") {
-        let output = Some(argsmatches.value_of("output")).unwrap_or(None);
-        let domain_or_file = argsmatches.value_of("domain").unwrap();
-
+        let output_file = argsmatches.get_one::<String>("output_file");
+        let domain_or_file = argsmatches.get_one::<String>("domain").unwrap();
         let domains = get_domains(domain_or_file);
-        let verbose = !argsmatches.is_present("silent");
+        let verbose = !argsmatches.get_flag("silent");
 
-        run_robots(domains, output, verbose).await;
+        run_robots(domains, output_file, verbose).await;
     }
 
     if let Some(argsmatches) = argsmatches.subcommand_matches("unify") {
-        let output = Some(argsmatches.value_of("output")).unwrap_or(None);
-        let url_or_file = argsmatches.value_of("url").unwrap();
+        let output_file = argsmatches.get_one::<String>("output_file");
+        let url_or_file = argsmatches.get_one::<String>("url").unwrap();
 
         let urls = get_domains(url_or_file);
-        let verbose = !argsmatches.is_present("silent");
+        let verbose = !argsmatches.get_flag("silent");
 
-        run_unify(urls, output, verbose).await;
+        run_unify(urls, output_file, verbose).await;
     }
 }
 
-fn get_domains(domain_or_file: &str) -> Vec<String> {
+fn get_domains(domain_or_file: &String) -> Vec<String> {
     if domain_or_file.ne("stdin") {
         if Path::new(domain_or_file).is_file() {
             let path = Path::new(domain_or_file);
@@ -289,7 +273,7 @@ async fn run_urls(
     domains: Vec<String>,
     subs: bool,
     check: bool,
-    output: Option<&str>,
+    output_file: Option<&String>,
     delay: u64,
     color: bool,
     verbose: bool,
@@ -315,14 +299,14 @@ async fn run_urls(
 
     let mut output_string = String::new();
     for handle in join_handles {
-        let ret_url = handle.await.expect("sdflkjds");
+        let ret_url = handle.await.expect("fail");
         output_string.push_str(ret_url.as_str());
     }
 
-    if let Some(file) = output {
-        write_string_to_file(output_string, file);
+    if let Some(file) = output_file {
+        write_string_to_file(output_string, &file);
         if verbose {
-            println!("urls saved to {}", file)
+            println!("urls saved to {}", &file)
         };
     }
 }
@@ -352,7 +336,7 @@ async fn run_url(
         format!("{}%2F*", domain)
     };
     let url = format!(
-        "http://web.archive.org/cdx/search/cdx?url={}&output=text&fl=original&collapse=urlkey",
+        "http://web.archive.org/cdx/search/cdx?url={}&output_file=text&fl=original&collapse=urlkey",
         pattern
     );
 
@@ -394,15 +378,15 @@ async fn run_url(
     }
 }
 
-async fn run_robots(domains: Vec<String>, output: Option<&str>, verbose: bool) {
+async fn run_robots(domains: Vec<String>, output_file: Option<&String>, verbose: bool) {
     let mut output_string = String::new();
     for domain in domains {
         output_string.push_str(run_robot(domain, verbose).await.as_str());
     }
-    if let Some(file) = output {
-        write_string_to_file(output_string, file);
+    if let Some(file) = output_file {
+        write_string_to_file(output_string, &file);
         if verbose {
-            println!("urls saved to {}", file)
+            println!("urls saved to {}", &file)
         }
     }
 }
@@ -413,14 +397,14 @@ async fn run_robot(domain: String, verbose: bool) -> String {
     get_all_robot_content(archives, verbose).await
 }
 
-async fn run_unify(urls: Vec<String>, output: Option<&str>, verbose: bool) {
+async fn run_unify(urls: Vec<String>, output_file: Option<&String>, verbose: bool) {
     let mut output_string = String::new();
     for url in urls {
         let archives = get_archives(url.as_str(), verbose).await;
         let unify_output = get_all_archives_content(archives, verbose).await;
         output_string.push_str(unify_output.as_str());
     }
-    if let Some(file) = output {
+    if let Some(file) = output_file {
         write_string_to_file(output_string, file);
         if verbose {
             println!("urls saved to {}", file)
@@ -428,7 +412,7 @@ async fn run_unify(urls: Vec<String>, output: Option<&str>, verbose: bool) {
     }
 }
 
-fn write_string_to_file(string: String, filename: &str) {
+fn write_string_to_file(string: String, filename: &String) {
     let mut file = File::create(filename).expect("Error creating the file");
     file.write_all(string.as_bytes())
         .expect("Error writing content to the file");
@@ -438,7 +422,7 @@ async fn get_archives(url: &str, verbose: bool) -> HashMap<String, String> {
     if verbose {
         println!("Looking for archives for {}...", url)
     };
-    let to_fetch= format!("https://web.archive.org/cdx/search/cdx?url={}&output=text&fl=timestamp,original&filter=statuscode:200&collapse=digest", url);
+    let to_fetch= format!("https://web.archive.org/cdx/search/cdx?url={}&output_file=text&fl=timestamp,original&filter=statuscode:200&collapse=digest", url);
     let lines: Vec<String> = reqwest::get(to_fetch.as_str())
         .await
         .expect("Error in GET request")
