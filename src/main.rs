@@ -315,7 +315,7 @@ async fn run_urls(
 
     let mut output_string = String::new();
     for handle in join_handles {
-        let ret_url = handle.await.expect("panic in run_url");
+        let ret_url = handle.await.expect("sdflkjds");
         output_string.push_str(ret_url.as_str());
     }
 
