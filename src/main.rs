@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path,PathBuf};
 use std::process;
 use std::{io, time};use tokio::time::sleep;
 
@@ -70,7 +70,7 @@ async fn main() {
                         .action(clap::ArgAction::SetFalse),
                 )
                 .arg(
-                    Arg::new("output_file")
+                    Arg::new("output_filepath")
                         .short('o')
                         .long("output-file")
                         .value_name("FILE")
@@ -111,7 +111,7 @@ async fn main() {
                     .help("domain name or file with domains")
                     .required(true))
                 .arg(
-                    Arg::new("output_file")
+                    Arg::new("output_filepath")
                         .short('o').long("output-file").value_name("FILE")
                         .help("Name of the file to write the list of uniq paths (default: print on stdout)"))
                 .arg(
@@ -129,7 +129,7 @@ async fn main() {
                     .help("url or file with urls")
                     .required(true))
                 .arg(
-                    Arg::new("output_file")
+                    Arg::new("output_filepath")
                         .short('o')
                         .long("output-file")
                         .value_name("FILE")
@@ -146,7 +146,8 @@ async fn main() {
 
         let domains = get_domains(domain_or_file);
 
-        let output_file = argsmatches.get_one::<String>("output_file");
+        let output_filepath
+         = argsmatches.get_one::<PathBuf>("output_filepath");
 
         let subs = argsmatches.get_flag("subs");
         let check = !argsmatches.get_flag("nocheck");
@@ -207,29 +208,34 @@ async fn main() {
             );
         }
         run_urls(
-            domains, subs, check, output_file, *delay, color, verbose, blacklist, whitelist, *workers,blacklist_code,whitelist_code
+            domains, subs, check, output_filepath
+            , *delay, color, verbose, blacklist, whitelist, *workers,blacklist_code,whitelist_code
         )
         .await;
     }
 
     // get all disallow robots
     if let Some(argsmatches) = argsmatches.subcommand_matches("robots") {
-        let output_file = argsmatches.get_one::<String>("output_file");
+        let output_filepath = argsmatches.get_one::<PathBuf>("output_filepath");
         let domain_or_file = argsmatches.get_one::<String>("domain").unwrap();
         let domains = get_domains(domain_or_file);
         let verbose = !argsmatches.get_flag("silent");
 
-        run_robots(domains, output_file, verbose).await;
+        run_robots(domains, output_filepath
+            , verbose).await;
     }
 
     if let Some(argsmatches) = argsmatches.subcommand_matches("unify") {
-        let output_file = argsmatches.get_one::<String>("output_file");
+        let output_filepath
+         = argsmatches.get_one::<PathBuf>("output_filepath
+        ");
         let url_or_file = argsmatches.get_one::<String>("url").unwrap();
 
         let urls = get_domains(url_or_file);
         let verbose = !argsmatches.get_flag("silent");
 
-        run_unify(urls, output_file, verbose).await;
+        run_unify(urls, output_filepath
+            , verbose).await;
     }
 }
 
@@ -273,7 +279,8 @@ async fn run_urls(
     domains: Vec<String>,
     subs: bool,
     check: bool,
-    output_file: Option<&String>,
+    output_filepath
+    : Option<&PathBuf>,
     delay: u64,
     color: bool,
     verbose: bool,
@@ -303,10 +310,11 @@ async fn run_urls(
         output_string.push_str(ret_url.as_str());
     }
 
-    if let Some(file) = output_file {
-        write_string_to_file(output_string, &file);
+    if let Some(path) = output_filepath
+     {
+        write_string_to_file(output_string, path);
         if verbose {
-            println!("urls saved to {}", &file)
+            println!("urls saved to {}", path.display())
         };
     }
 }
@@ -336,7 +344,8 @@ async fn run_url(
         format!("{}%2F*", domain)
     };
     let url = format!(
-        "http://web.archive.org/cdx/search/cdx?url={}&output_file=text&fl=original&collapse=urlkey",
+        "http://web.archive.org/cdx/search/cdx?url={}&output_filepath
+        =text&fl=original&collapse=urlkey",
         pattern
     );
 
@@ -378,15 +387,17 @@ async fn run_url(
     }
 }
 
-async fn run_robots(domains: Vec<String>, output_file: Option<&String>, verbose: bool) {
+async fn run_robots(domains: Vec<String>, output_filepath
+    : Option<&PathBuf>, verbose: bool) {
     let mut output_string = String::new();
     for domain in domains {
         output_string.push_str(run_robot(domain, verbose).await.as_str());
     }
-    if let Some(file) = output_file {
-        write_string_to_file(output_string, &file);
+    if let Some(path) = output_filepath
+     {
+        write_string_to_file(output_string, path);
         if verbose {
-            println!("urls saved to {}", &file)
+            println!("urls saved to {}", path.display())
         }
     }
 }
@@ -397,22 +408,24 @@ async fn run_robot(domain: String, verbose: bool) -> String {
     get_all_robot_content(archives, verbose).await
 }
 
-async fn run_unify(urls: Vec<String>, output_file: Option<&String>, verbose: bool) {
+async fn run_unify(urls: Vec<String>, output_filepath
+    : Option<&PathBuf>, verbose: bool) {
     let mut output_string = String::new();
     for url in urls {
         let archives = get_archives(url.as_str(), verbose).await;
         let unify_output = get_all_archives_content(archives, verbose).await;
         output_string.push_str(unify_output.as_str());
     }
-    if let Some(file) = output_file {
-        write_string_to_file(output_string, file);
+    if let Some(path) = output_filepath
+     {
+        write_string_to_file(output_string, path);
         if verbose {
-            println!("urls saved to {}", file)
+            println!("urls saved to {}", path.display())
         };
     }
 }
 
-fn write_string_to_file(string: String, filename: &String) {
+fn write_string_to_file(string: String, filename: &Path) {
     let mut file = File::create(filename).expect("Error creating the file");
     file.write_all(string.as_bytes())
         .expect("Error writing content to the file");
@@ -422,7 +435,7 @@ async fn get_archives(url: &str, verbose: bool) -> HashMap<String, String> {
     if verbose {
         println!("Looking for archives for {}...", url)
     };
-    let to_fetch= format!("https://web.archive.org/cdx/search/cdx?url={}&output_file=text&fl=timestamp,original&filter=statuscode:200&collapse=digest", url);
+    let to_fetch= format!("https://web.archive.org/cdx/search/cdx?url={}&output_filepath=text&fl=timestamp,original&filter=statuscode:200&collapse=digest", url);
     let lines: Vec<String> = reqwest::get(to_fetch.as_str())
         .await
         .expect("Error in GET request")
