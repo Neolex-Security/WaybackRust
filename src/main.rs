@@ -150,10 +150,10 @@ async fn main() {
          = argsmatches.get_one::<PathBuf>("output_filepath");
 
         let subs = argsmatches.get_flag("subs");
-        let check = !argsmatches.get_flag("nocheck");
+        let check = argsmatches.get_flag("nocheck");
 
-        let color = !argsmatches.get_flag("nocolor");
-        let verbose = !argsmatches.get_flag("silent");
+        let color = argsmatches.get_flag("nocolor");
+        let verbose = argsmatches.get_flag("silent");
         let delay = argsmatches.get_one::<u64>("delay").unwrap_or(&0);
         let workers = match argsmatches.get_one::<usize>("threads") {
             Some(d) => {
@@ -219,7 +219,7 @@ async fn main() {
         let output_filepath = argsmatches.get_one::<PathBuf>("output_filepath");
         let domain_or_file = argsmatches.get_one::<String>("domain").unwrap();
         let domains = get_domains(domain_or_file);
-        let verbose = !argsmatches.get_flag("silent");
+        let verbose = argsmatches.get_flag("silent");
 
         run_robots(domains, output_filepath
             , verbose).await;
@@ -232,7 +232,7 @@ async fn main() {
         let url_or_file = argsmatches.get_one::<String>("url").unwrap();
 
         let urls = get_domains(url_or_file);
-        let verbose = !argsmatches.get_flag("silent");
+        let verbose = argsmatches.get_flag("silent");
 
         run_unify(urls, output_filepath
             , verbose).await;
