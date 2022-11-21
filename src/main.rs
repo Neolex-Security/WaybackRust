@@ -74,6 +74,7 @@ async fn main() {
                         .short('o')
                         .long("output-file")
                         .value_name("FILE")
+                        .value_parser(clap::value_parser!(PathBuf))
                         .help(
                             "Name of the file to write the list of urls (default: print on stdout)",
                         )
