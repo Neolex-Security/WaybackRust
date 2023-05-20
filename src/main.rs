@@ -54,6 +54,7 @@ async fn main() {
                         .long("delay")
                         .help("Make a delay between each request")
                         .value_name("delay in milliseconds")
+                        .value_parser(clap::value_parser!(u64))
                 )
                 .arg(
                     Arg::new("threads")
@@ -569,8 +570,7 @@ async fn http_status_urls_delay(
                     }
                 }
             }
-            Err(e) => {
-                eprintln!("error geting : {}", e);
+            Err(_e) => {
             }
         }
     }
