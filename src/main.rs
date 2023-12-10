@@ -62,6 +62,7 @@ async fn main() {
                         .long("threads")
                         .help("Number of concurrent requests (default: 24)")
                         .value_name("Number of concurrent requests")
+                        .value_parser(clap::value_parser!(usize))
                 )
                 .arg(
                     Arg::new("nocolor")
