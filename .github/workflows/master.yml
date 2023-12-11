@@ -16,7 +16,6 @@ jobs:
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          rust-version: stable
           components: clippy
       - name: Build | Lint
         run: cargo clippy
@@ -28,8 +27,6 @@ jobs:
         uses: actions/checkout@v4
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
-        with:
-          rust-version: stable
       - name: Build | Compile
         run: cargo check
   test:
@@ -52,6 +49,6 @@ jobs:
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          rust-version: ${{ matrix.rust }}
+          toolchain: ${{ matrix.rust }}
       - name: Build | Compile
         run: cargo test
