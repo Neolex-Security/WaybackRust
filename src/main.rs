@@ -13,6 +13,7 @@ use std::process;
 use std::{io, time};
 use tokio::time::sleep;
 
+
 #[tokio::main]
 async fn main() {
     #[cfg(target_os = "windows")]
@@ -140,8 +141,7 @@ async fn main() {
 
         let domains = get_domains(domain_or_file);
 
-        let output_filepath = argsmatches.get_one::<PathBuf>("output_filepath");
-
+        let filepath = argsmatches.get_one::<PathBuf>("output_filepath");
         let subs = argsmatches.get_flag("subs");
         let check = argsmatches.get_flag("nocheck");
 
@@ -156,7 +156,6 @@ async fn main() {
                         Colour::RGB(255, 165, 0)
                             .bold()
                             .paint("Warning:")
-                            .to_string()
                     );
                     &0
                 } else {
@@ -169,10 +168,7 @@ async fn main() {
         if delay > &0 && !check {
             println!(
                 "{} delay is useless when --nocheck is used.",
-                Colour::RGB(255, 165, 0)
-                    .bold()
-                    .paint("Warning:")
-                    .to_string()
+                Colour::RGB(255, 165, 0).bold().paint("Warning:")
             );
         }
         let blacklist: Vec<String> = match argsmatches.get_one::<String>("blacklist") {
@@ -200,26 +196,23 @@ async fn main() {
         if !blacklist.is_empty() && !whitelist.is_empty() {
             println!(
                 "{} You set a blacklist and a whitelist. Only the whitelist will be used.",
-                Colour::RGB(255, 165, 0)
-                    .bold()
-                    .paint("Warning:")
-                    .to_string()
+                Colour::RGB(255, 165, 0).bold().paint("Warning:")
             );
         }
-        run_urls(
-            domains,
+        let config = UrlConfig {
             subs,
             check,
-            output_filepath,
-            *delay,
+            delay: *delay,
             color,
             verbose,
             blacklist,
             whitelist,
-            *workers,
+            workers: *workers,
             blacklist_code,
             whitelist_code,
-        )
+        };
+
+        run_urls(domains,config,filepath)
         .await;
     }
 
@@ -234,10 +227,7 @@ async fn main() {
     }
 
     if let Some(argsmatches) = argsmatches.subcommand_matches("unify") {
-        let output_filepath = argsmatches.get_one::<PathBuf>(
-            "output_filepath
-        ",
-        );
+        let output_filepath = argsmatches.get_one::<PathBuf>("output_filepath");
         let url_or_file = argsmatches.get_one::<String>("url").unwrap();
 
         let urls = get_domains(url_or_file);
@@ -247,6 +237,21 @@ async fn main() {
     }
 }
 
+#[derive(Clone)]
+struct UrlConfig {
+    subs: bool,
+    check: bool,
+    delay: u64,
+    color: bool,
+    verbose: bool,
+    blacklist: Vec<String>,
+    whitelist: Vec<String>,
+    workers: usize,
+    blacklist_code: Vec<u16>,
+    whitelist_code: Vec<u16>,
+}
+
+
 fn get_domains(domain_or_file: &String) -> Vec<String> {
     if domain_or_file.ne("stdin") {
         if Path::new(domain_or_file).is_file() {
@@ -254,7 +259,7 @@ fn get_domains(domain_or_file: &String) -> Vec<String> {
             let display = path.display();
 
             // Open the path in read-only mode, returns `io::Result<File>`
-            let mut file = match File::open(&path) {
+            let mut file = match File::open(path) {
                 // The `description` method of `io::Error` returns a string that
                 // describes the error
                 Err(why) => panic!("couldn't open {}: {}", display, why),
@@ -283,78 +288,35 @@ fn get_domains(domain_or_file: &String) -> Vec<String> {
     }
 }
 
-async fn run_urls(
-    domains: Vec<String>,
-    subs: bool,
-    check: bool,
-    output_filepath: Option<&PathBuf>,
-    delay: u64,
-    color: bool,
-    verbose: bool,
-    blacklist: Vec<String>,
-    whitelist: Vec<String>,
-    workers: usize,
-    blacklist_code: Vec<u16>,
-    whitelist_code: Vec<u16>,
-) {
+
+async fn run_urls(domains: Vec<String>, config: UrlConfig, filepath: Option<&PathBuf>) {
     let mut join_handles = Vec::with_capacity(domains.len());
     for domain in domains {
-        let black = blacklist.clone();
-        let white = whitelist.clone();
-        let blacklist_code = blacklist_code.clone();
-        let whitelist_code = whitelist_code.clone();
-        join_handles.push(tokio::spawn(async move {
-            run_url(
-                domain,
-                subs,
-                check,
-                delay,
-                color,
-                verbose,
-                black,
-                white,
-                workers,
-                blacklist_code,
-                whitelist_code,
-            )
-            .await
-        }));
-    }
+        let config_clone = config.clone();
+        join_handles.push(tokio::spawn(async move{
+            run_url(domain, config_clone).await
+        }
+        ))};
 
     let mut output_string = String::new();
     for handle in join_handles {
         let ret_url = handle.await.expect("fail");
         output_string.push_str(ret_url.as_str());
     }
-
-    if let Some(path) = output_filepath {
-        write_string_to_file(output_string, path);
-        if verbose {
-            println!("urls saved to {}", path.display())
-        };
+    if let Some(filepath) = filepath {
+        write_string_to_file(output_string, filepath);
+        println!("urls saved to {}", &filepath.display())
     }
 }
 fn get_path(url: &str) -> String {
-    match Url::parse(&url) {
+    match Url::parse(url) {
         Ok(parsed) => parsed.path().to_string(),
         Err(_) => "".to_string(),
     }
 }
 
-async fn run_url(
-    domain: String,
-    subs: bool,
-    check: bool,
-    delay: u64,
-    color: bool,
-    verbose: bool,
-    blacklist: Vec<String>,
-    whitelist: Vec<String>,
-    workers: usize,
-    blacklist_code: Vec<u16>,
-    whitelist_code: Vec<u16>,
-) -> String {
-    let pattern = if subs {
+async fn run_url(domain: String,config: UrlConfig) -> String {
+    let pattern = if config.subs {
         format!("*.{}%2F*", domain)
     } else {
         format!("{}%2F*", domain)
@@ -382,27 +344,27 @@ async fn run_url(
 
     let lines = response_text.lines().map(|item| item.to_string());
 
-    let urls: Vec<String> = if !whitelist.is_empty() {
+    let urls: Vec<String> = if !config.whitelist.is_empty() {
         lines
-            .filter(|url| whitelist.iter().any(|ext| get_path(url).ends_with(ext)))
+            .filter(|url| config.whitelist.iter().any(|ext| get_path(url).ends_with(ext)))
             .collect()
     } else {
         lines
-            .filter(|url| !blacklist.iter().any(|ext| get_path(url).ends_with(ext)))
+            .filter(|url| !config.blacklist.iter().any(|ext| get_path(url).ends_with(ext)))
             .collect()
     };
-    if check {
-        if delay > 0 {
-            http_status_urls_delay(urls, delay, color, verbose, blacklist_code, whitelist_code)
+    if config.check {
+        if config.delay > 0 {
+            http_status_urls_delay(urls, config.delay, config.color, config.verbose, &config.blacklist_code, &config.whitelist_code)
                 .await
         } else {
             http_status_urls_no_delay(
                 urls,
-                color,
-                verbose,
-                workers,
-                blacklist_code,
-                whitelist_code,
+                config.color,
+                config.verbose,
+                config.workers,
+                &config.blacklist_code,
+                &config.whitelist_code,
             )
             .await
         }
@@ -417,11 +379,9 @@ async fn run_robots(domains: Vec<String>, output_filepath: Option<&PathBuf>, ver
     for domain in domains {
         output_string.push_str(run_robot(domain, verbose).await.as_str());
     }
-    if let Some(path) = output_filepath {
-        write_string_to_file(output_string, path);
-        if verbose {
-            println!("urls saved to {}", path.display())
-        }
+    if let Some(filepath) = output_filepath {
+        write_string_to_file(output_string, filepath);
+        println!("urls saved to {}", &filepath.display())
     }
 }
 
@@ -438,15 +398,16 @@ async fn run_unify(urls: Vec<String>, output_filepath: Option<&PathBuf>, verbose
         let unify_output = get_all_archives_content(archives, verbose).await;
         output_string.push_str(unify_output.as_str());
     }
-    if let Some(path) = output_filepath {
-        write_string_to_file(output_string, path);
+    if let Some(filepath) = output_filepath {
+        write_string_to_file(output_string, filepath);
         if verbose {
-            println!("urls saved to {}", path.display())
+            println!("urls saved to {}", filepath.display())
         };
     }
+
 }
 
-fn write_string_to_file(string: String, filename: &Path) {
+fn write_string_to_file(string: String, filename: &PathBuf) {
     let mut file = File::create(filename).expect("Error creating the file");
     file.write_all(string.as_bytes())
         .expect("Error writing content to the file");
@@ -544,8 +505,8 @@ async fn http_status_urls_delay(
     delay: u64,
     color: bool,
     verbose: bool,
-    blacklist_code: Vec<u16>,
-    whitelist_code: Vec<u16>,
+    blacklist_code: &[u16],
+    whitelist_code: &[u16],
 ) -> String {
     if verbose {
         println!("We're checking status of {} urls... ", urls.len())
@@ -564,36 +525,34 @@ async fn http_status_urls_delay(
                     let delay_time = time::Duration::from_millis(delay);
                     sleep(delay_time).await;
                 }
-                if whitelist_code.is_empty()
-                    || (&whitelist_code)
-                        .into_iter()
+                if (whitelist_code.is_empty()
+                    || (whitelist_code)
+                        .iter()
+                        .any(|code| *code == response.status().as_u16()))
+                    && !(blacklist_code)
+                        .iter()
                         .any(|code| *code == response.status().as_u16())
                 {
-                    if !(&blacklist_code)
-                        .into_iter()
-                        .any(|code| *code == response.status().as_u16())
-                    {
-                        let str_output = if color {
-                            format!("{} {}\n", &url, colorize(&response))
-                        } else if response.status().is_redirection() {
-                            format!(
-                                "{} {} to {}\n",
-                                &url,
-                                &response.status(),
-                                &response
-                                    .headers()
-                                    .get(LOCATION)
-                                    .unwrap_or(&HeaderValue::from_str("").unwrap())
-                                    .to_str()
-                                    .unwrap()
-                            )
-                        } else {
-                            format!("{} {}\n", &url, &response.status())
-                        };
+                    let str_output = if color {
+                        format!("{} {}\n", &url, colorize(&response))
+                    } else if response.status().is_redirection() {
+                        format!(
+                            "{} {} to {}\n",
+                            &url,
+                            &response.status(),
+                            &response
+                                .headers()
+                                .get(LOCATION)
+                                .unwrap_or(&HeaderValue::from_str("").unwrap())
+                                .to_str()
+                                .unwrap()
+                        )
+                    } else {
+                        format!("{} {}\n", &url, &response.status())
+                    };
 
-                        print!("{}", str_output);
-                        ret.push_str(&str_output);
-                    }
+                    print!("{}", str_output);
+                    ret.push_str(&str_output);
                 }
             }
             Err(_e) => {}
@@ -608,8 +567,8 @@ async fn http_status_urls_no_delay(
     color: bool,
     verbose: bool,
     workers: usize,
-    blacklist_code: Vec<u16>,
-    whitelist_code: Vec<u16>,
+    blacklist_code: &[u16],
+    whitelist_code: &Vec<u16>,
 ) -> String {
     if verbose {
         println!("We're checking status of {} urls... ", urls.len())
@@ -626,35 +585,33 @@ async fn http_status_urls_no_delay(
     while let Some(b) = bodies.next().await {
         match b.0 {
             Ok(response) => {
-                if whitelist_code.is_empty()
-                    || (&whitelist_code)
-                        .into_iter()
+                if (whitelist_code.is_empty()
+                    || (whitelist_code)
+                        .iter()
+                        .any(|code| *code == response.status().as_u16()))
+                    && !(blacklist_code)
+                        .iter()
                         .any(|code| *code == response.status().as_u16())
                 {
-                    if !(&blacklist_code)
-                        .into_iter()
-                        .any(|code| *code == response.status().as_u16())
-                    {
-                        let str_output = if color {
-                            format!("{} {}\n", &b.1, colorize(&response))
-                        } else if response.status().is_redirection() {
-                            format!(
-                                "{} {} to {}\n",
-                                &b.1,
-                                &response.status(),
-                                &response
-                                    .headers()
-                                    .get(LOCATION)
-                                    .unwrap_or(&HeaderValue::from_str("").unwrap())
-                                    .to_str()
-                                    .unwrap()
-                            )
-                        } else {
-                            format!("{} {}\n", &b.1, &response.status())
-                        };
-                        print!("{}", str_output);
-                        ret.push_str(&str_output);
-                    }
+                    let str_output = if color {
+                        format!("{} {}\n", &b.1, colorize(&response))
+                    } else if response.status().is_redirection() {
+                        format!(
+                            "{} {} to {}\n",
+                            &b.1,
+                            &response.status(),
+                            &response
+                                .headers()
+                                .get(LOCATION)
+                                .unwrap_or(&HeaderValue::from_str("").unwrap())
+                                .to_str()
+                                .unwrap()
+                        )
+                    } else {
+                        format!("{} {}\n", &b.1, &response.status())
+                    };
+                    print!("{}", str_output);
+                    ret.push_str(&str_output);
                 }
             }
             Err(e) => {
