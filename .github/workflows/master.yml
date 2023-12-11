@@ -13,8 +13,8 @@ jobs:
     steps:
       - name: Setup | Checkout
         uses: actions/checkout@v4
-      - name: Setup | Rust
-        uses: ATiltedTree/setup-rust@v1
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
         with:
           rust-version: stable
           components: clippy
@@ -26,8 +26,8 @@ jobs:
     steps:
       - name: Setup | Checkout
         uses: actions/checkout@v4
-      - name: Setup | Rust
-        uses: ATiltedTree/setup-rust@v1
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
         with:
           rust-version: stable
       - name: Build | Compile
@@ -49,8 +49,8 @@ jobs:
     steps:
       - name: Setup | Checkout
         uses: actions/checkout@v4
-      - name: Setup | Rust
-        uses: ATiltedTree/setup-rust@v1
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
         with:
           rust-version: ${{ matrix.rust }}
       - name: Build | Compile
