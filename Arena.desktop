@@ -1,7 +1,0 @@
-[Desktop Entry]
-Name=MTG Arenagood
-Exec=wine /home/neolex/.wine/drive_c/Program\ Files/Wizards\ of\ the\ Coast/MTGA/MTGALauncher/MTGALauncher.exe
-Type=Application
-StartupNotify=true
-Comment=MTG Arena
-Icon=C175_MTGALauncher.0
