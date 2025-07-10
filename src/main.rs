@@ -11,7 +11,9 @@ use std::path::{Path, PathBuf};
 use std::process;
 use std::{io, time};
 use tokio::time::sleep;
-use futures::{stream, StreamExt};
+use futures::{stream, StreamExt, TryStreamExt};
+use tokio_util::codec::{FramedRead, LinesCodec};
+use tokio_util::io::StreamReader;
 
 #[tokio::main]
 async fn main() {
@@ -116,16 +118,16 @@ async fn main() {
                     .help("domain name or file with domains")
                     .required(true))
                 .arg(
+                    Arg::new("output_filepath")
+                        .short('o').long("output-file").value_name("FILE")
+                        .help("Name of the file to write the list of uniq paths (default: print on stdout)"))
+                .arg(
                     Arg::new("verbose")
-                        .long("verbsose")
+                        .long("verbose")
                         .short('v')
                         .help("Print all informations")
                         .action(clap::ArgAction::SetTrue),
-                )
-                .arg(
-                    Arg::new("output_filepath")
-                        .short('o').long("output-file").value_name("FILE")
-                        .help("Name of the file to write the list of uniq paths (default: print on stdout)")),
+                ),
         )
         .subcommand(
             Command::new("unify")
@@ -139,7 +141,14 @@ async fn main() {
                         .short('o')
                         .long("output-file")
                         .value_name("FILE")
-                        .help("Name of the file to write contents of archives (default: print on stdout)")),
+                        .help("Name of the file to write contents of archives (default: print on stdout)"))
+                .arg(
+                    Arg::new("verbose")
+                        .long("verbose")
+                        .short('v')
+                        .help("Print all informations")
+                        .action(clap::ArgAction::SetTrue),
+                ),
         ).get_matches();
     // get all urls responses codes
     if let Some(argsmatches) = argsmatches.subcommand_matches("urls") {
@@ -512,18 +521,37 @@ async fn get_all_robot_content(archives: HashMap<String, String>, verbose: bool)
     output_string
 }
 
+// Unbuffered get_archive_content
 async fn get_archive_content(url: String, timestamp: String) -> String {
     let timestampurl = format!("https://web.archive.org/web/{}/{}", timestamp, url);
-    match reqwest::get(timestampurl.as_str()).await {
-        Ok(resp) => resp.text().await.unwrap_or_else(|_| "".to_string()),
+    let response = match reqwest::get(&timestampurl).await {
+        Ok(resp) => resp,
         Err(err) => {
-            eprintln!(
-                "Error while parsing response for {} ({})",
-                timestampurl, err
-            );
-            String::from("")
+            eprintln!("Error while requesting {} ({}):", timestampurl, err);
+            return String::new();
+        }
+    };
+
+    let stream = response.bytes_stream();
+    let stream_reader = StreamReader::new(
+        stream.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e)),
+    );
+    let mut lines = FramedRead::new(stream_reader, LinesCodec::new());
+
+    let mut content = String::new();
+    while let Some(line) = lines.next().await {
+        match line {
+            Ok(l) => {
+                content.push_str(&l);
+                content.push('\n');
+            }
+            Err(e) => {
+                eprintln!("Error reading line from {}: {}", timestampurl, e);
+            }
         }
     }
+
+    content
 }
 
 async fn http_status_urls_delay(
