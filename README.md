@@ -10,13 +10,6 @@ Here is the functionalities :
 
 ## Install 
 
-##### Download the statically linked binary from github releases:
-* download the static binary then : `
-* `$ tar xvf waybackrust-x86_64-unknown-linux-gnu.tar.gz`
-* `$ chmod +x waybackrust`
-* `# mv waybackrust /usr/local/bin`
-* run waybackrust : `$ waybackrust `
-
 ##### from cargo (crates.io):
 `cargo install waybackrust`
 
