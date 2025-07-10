@@ -116,6 +116,13 @@ async fn main() {
                     .help("domain name or file with domains")
                     .required(true))
                 .arg(
+                    Arg::new("verbose")
+                        .long("verbsose")
+                        .short('v')
+                        .help("Print all informations")
+                        .action(clap::ArgAction::SetTrue),
+                )
+                .arg(
                     Arg::new("output_filepath")
                         .short('o').long("output-file").value_name("FILE")
                         .help("Name of the file to write the list of uniq paths (default: print on stdout)")),
