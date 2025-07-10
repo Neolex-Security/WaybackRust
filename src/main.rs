@@ -1,7 +1,6 @@
 extern crate clap;
 use ansi_term::Colour;
 use clap::{Arg, Command};
-use futures::{stream, StreamExt};
 use reqwest::header::{HeaderValue, LOCATION};
 use reqwest::{redirect, Response, Url};
 use std::collections::HashMap;
@@ -12,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::process;
 use std::{io, time};
 use tokio::time::sleep;
-
+use futures::{stream, StreamExt};
 
 #[tokio::main]
 async fn main() {
@@ -315,51 +314,70 @@ fn get_path(url: &str) -> String {
     }
 }
 
-async fn run_url(domain: String,config: UrlConfig) -> String {
+async fn run_url(domain: String, config: UrlConfig) -> String {
     let pattern = if config.subs {
         format!("*.{}%2F*", domain)
     } else {
         format!("{}%2F*", domain)
     };
+
     let url = format!(
-        "http://web.archive.org/cdx/search/cdx?url={}&output_filepath
-        =text&fl=original&collapse=urlkey",
+        "http://web.archive.org/cdx/search/cdx?url={}&output=text&fl=original&collapse=urlkey",
         pattern
     );
 
-    let response = match reqwest::get(url.as_str()).await {
+    let client = reqwest::Client::new();
+    let response = match client.get(url.as_str()).send().await {
         Ok(res) => res,
         Err(e) => {
             eprintln!("{}", e);
             process::exit(-1)
         }
     };
-    let response_text = match response.text().await {
-        Ok(txt) => txt,
-        Err(e) => {
-            eprintln!("{}", e);
-            process::exit(-1)
+    println!("{}", response.status());
+    use tokio_util::io::StreamReader;
+    use tokio_util::codec::{FramedRead, LinesCodec};
+    use futures::{StreamExt, TryStreamExt};
+
+    let stream = response.bytes_stream();
+    let stream_reader = StreamReader::new(
+        stream.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e)),
+    );
+    let mut lines = FramedRead::new(stream_reader, LinesCodec::new());
+
+    let mut urls = Vec::new();
+    while let Some(line_result) = lines.next().await {
+        if let Ok(line) = line_result {
+            urls.push(line.to_string());
+            println!("{}", line);
         }
-    };
+    }
 
-    let lines = response_text.lines().map(|item| item.to_string());
-
-    let urls: Vec<String> = if !config.whitelist.is_empty() {
-        lines
+    // Applique blacklist/whitelist
+    let filtered_urls: Vec<String> = if !config.whitelist.is_empty() {
+        urls.into_iter()
             .filter(|url| config.whitelist.iter().any(|ext| get_path(url).ends_with(ext)))
             .collect()
     } else {
-        lines
+        urls.into_iter()
             .filter(|url| !config.blacklist.iter().any(|ext| get_path(url).ends_with(ext)))
             .collect()
     };
+
     if config.check {
         if config.delay > 0 {
-            http_status_urls_delay(urls, config.delay, config.color, config.verbose, &config.blacklist_code, &config.whitelist_code)
-                .await
+            http_status_urls_delay(
+                filtered_urls,
+                config.delay,
+                config.color,
+                config.verbose,
+                &config.blacklist_code,
+                &config.whitelist_code,
+            )
+            .await
         } else {
             http_status_urls_no_delay(
-                urls,
+                filtered_urls,
                 config.color,
                 config.verbose,
                 config.workers,
@@ -369,10 +387,11 @@ async fn run_url(domain: String,config: UrlConfig) -> String {
             .await
         }
     } else {
-        println!("{}", urls.join("\n"));
-        urls.join("\n")
+        println!("{}", filtered_urls.join("\n"));
+        filtered_urls.join("\n")
     }
 }
+
 
 async fn run_robots(domains: Vec<String>, output_filepath: Option<&PathBuf>, verbose: bool) {
     let mut output_string = String::new();
