@@ -322,7 +322,7 @@ async fn run_urls(domains: Vec<String>, config: UrlConfig, filepath: Option<&Pat
     }
     if let Some(filepath) = filepath {
         write_string_to_file(output_string, filepath);
-        println!("urls saved to {}", &filepath.display())
+        println!("urls saved to {display}", display=&filepath.display())
     }
 }
 fn get_path(url: &str) -> String {
@@ -334,32 +334,32 @@ fn get_path(url: &str) -> String {
 
 async fn run_url(domain: String, config: UrlConfig) -> String {
     let pattern = if config.subs {
-        format!("*.{}%2F*", domain)
+        format!("*.{domain}%2F*")
     } else {
-        format!("{}%2F*", domain)
+        format!("{domain}%2F*")
     };
 
     let url = format!(
-        "http://web.archive.org/cdx/search/cdx?url={}&output=text&fl=original&collapse=urlkey",
-        pattern
+        "http://web.archive.org/cdx/search/cdx?url={pattern}&output=text&fl=original&collapse=urlkey"
     );
 
     let client = reqwest::Client::new();
     let response = match client.get(url.as_str()).send().await {
         Ok(res) => res,
         Err(e) => {
-            eprintln!("{}", e);
+            eprintln!("{e}");
             process::exit(-1)
         }
     };
-    println!("{}", response.status());
+    let response_status = response.status();
+    println!("{response_status}");
     use tokio_util::io::StreamReader;
     use tokio_util::codec::{FramedRead, LinesCodec};
     use futures::{StreamExt, TryStreamExt};
 
     let stream = response.bytes_stream();
     let stream_reader = StreamReader::new(
-        stream.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e)),
+        stream.map_err(std::io::Error::other),
     );
     let mut lines = FramedRead::new(stream_reader, LinesCodec::new());
 
@@ -367,7 +367,7 @@ async fn run_url(domain: String, config: UrlConfig) -> String {
     while let Some(line_result) = lines.next().await {
         if let Ok(line) = line_result {
             urls.push(line.to_string());
-            println!("{}", line);
+            println!("{line}");
         }
     }
 
@@ -418,12 +418,12 @@ async fn run_robots(domains: Vec<String>, output_filepath: Option<&PathBuf>, ver
     }
     if let Some(filepath) = output_filepath {
         write_string_to_file(output_string, filepath);
-        println!("urls saved to {}", &filepath.display())
+        println!("urls saved to {display}", display=filepath.display())
     }
 }
 
 async fn run_robot(domain: String, verbose: bool) -> String {
-    let url = format!("{}/robots.txt", domain);
+    let url = format!("{domain}/robots.txt");
     let archives = get_archives(url.as_str(), verbose).await;
     get_all_robot_content(archives, verbose).await
 }
@@ -438,7 +438,7 @@ async fn run_unify(urls: Vec<String>, output_filepath: Option<&PathBuf>, verbose
     if let Some(filepath) = output_filepath {
         write_string_to_file(output_string, filepath);
         if verbose {
-            println!("urls saved to {}", filepath.display())
+            println!("urls saved to {display}", display=filepath.display())
         };
     }
 
@@ -452,9 +452,9 @@ fn write_string_to_file(string: String, filename: &PathBuf) {
 
 async fn get_archives(url: &str, verbose: bool) -> HashMap<String, String> {
     if verbose {
-        println!("Looking for archives for {}...", url)
+        println!("Looking for archives for {url}...")
     };
-    let to_fetch= format!("https://web.archive.org/cdx/search/cdx?url={}&output_filepath=text&fl=timestamp,original&filter=statuscode:200&collapse=digest", url);
+    let to_fetch= format!("https://web.archive.org/cdx/search/cdx?url={url}&output_filepath=text&fl=timestamp,original&filter=statuscode:200&collapse=digest");
     let lines: Vec<String> = reqwest::get(to_fetch.as_str())
         .await
         .expect("Error in GET request")
@@ -480,14 +480,14 @@ async fn get_archives(url: &str, verbose: bool) -> HashMap<String, String> {
 
 async fn get_all_archives_content(archives: HashMap<String, String>, verbose: bool) -> String {
     if verbose {
-        println!("Getting {} archives...", archives.len())
+        println!("Getting {len} archives...", len=archives.len());
     };
 
     let mut all_text = String::new();
     for (timestamp, url) in archives {
         let content = get_archive_content(url, timestamp).await;
         if verbose {
-            println!("{}", content);
+            println!("{content}");
         }
         all_text.push_str(content.as_str());
     }
@@ -497,7 +497,7 @@ async fn get_all_archives_content(archives: HashMap<String, String>, verbose: bo
 
 async fn get_all_robot_content(archives: HashMap<String, String>, verbose: bool) -> String {
     if verbose {
-        println!("Getting {} archives...", archives.len())
+        println!("Getting {len} archives...", len=archives.len());
     };
 
     let mut output_string = String::new();
@@ -513,9 +513,10 @@ async fn get_all_robot_content(archives: HashMap<String, String>, verbose: bool)
 
         for line in disallowed_lines {
             if !output_string.contains(&line) {
-                output_string.push_str(format!("{}\n", line).as_str());
+                output_string.push_str(format!("{line}\n").as_str());
                 if verbose {
-                    println!("{}", line.trim());
+                    let trimmed = line.trim();
+                    println!("{trimmed}");
                 }
             }
         }
@@ -525,18 +526,18 @@ async fn get_all_robot_content(archives: HashMap<String, String>, verbose: bool)
 
 // Unbuffered get_archive_content
 async fn get_archive_content(url: String, timestamp: String) -> String {
-    let timestampurl = format!("https://web.archive.org/web/{}/{}", timestamp, url);
+    let timestampurl = format!("https://web.archive.org/web/{timestamp}/{url}");
     let response = match reqwest::get(&timestampurl).await {
         Ok(resp) => resp,
         Err(err) => {
-            eprintln!("Error while requesting {} ({}):", timestampurl, err);
+            eprintln!("Error while requesting {timestampurl} ({err}):");
             return String::new();
         }
     };
 
     let stream = response.bytes_stream();
     let stream_reader = StreamReader::new(
-        stream.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e)),
+        stream.map_err(std::io::Error::other),
     );
     let mut lines = FramedRead::new(stream_reader, LinesCodec::new());
 
@@ -548,7 +549,7 @@ async fn get_archive_content(url: String, timestamp: String) -> String {
                 content.push('\n');
             }
             Err(e) => {
-                eprintln!("Error reading line from {}: {}", timestampurl, e);
+                eprintln!("Error reading line from {timestampurl}: {e}");
             }
         }
     }
@@ -565,7 +566,7 @@ async fn http_status_urls_delay(
     whitelist_code: &[u16],
 ) -> String {
     if verbose {
-        println!("We're checking status of {} urls... ", urls.len())
+        println!("We're checking status of {len} urls... ", len=urls.len());
     };
     let mut ret: String = String::new();
 
@@ -590,24 +591,19 @@ async fn http_status_urls_delay(
                         .any(|code| *code == response.status().as_u16())
                 {
                     let str_output = if color {
-                        format!("{} {}\n", &url, colorize(&response))
+                        format!("{url} {colorized}\n", url=&url, colorized=colorize(&response))
                     } else if response.status().is_redirection() {
                         format!(
-                            "{} {} to {}\n",
-                            &url,
-                            &response.status(),
-                            &response
-                                .headers()
-                                .get(LOCATION)
-                                .unwrap_or(&HeaderValue::from_str("").unwrap())
-                                .to_str()
-                                .unwrap()
+                            "{url} {status} to {location}\n",
+                            url=&url,
+                            status=&response.status(),
+                            location=&response.headers().get(LOCATION).unwrap_or(&HeaderValue::from_str("").unwrap()).to_str().unwrap()
                         )
                     } else {
-                        format!("{} {}\n", &url, &response.status())
+                        format!("{url} {status}\n", url=&url, status=&response.status())
                     };
 
-                    print!("{}", str_output);
+                    print!("{str_output}");
                     ret.push_str(&str_output);
                 }
             }
@@ -624,10 +620,10 @@ async fn http_status_urls_no_delay(
     verbose: bool,
     workers: usize,
     blacklist_code: &[u16],
-    whitelist_code: &Vec<u16>,
+    whitelist_code: &[u16],
 ) -> String {
     if verbose {
-        println!("We're checking status of {} urls... ", urls.len())
+        println!("We're checking status of {len} urls... ", len=urls.len());
     };
     let client = reqwest::ClientBuilder::new()
         .redirect(redirect::Policy::none())
@@ -650,29 +646,24 @@ async fn http_status_urls_no_delay(
                         .any(|code| *code == response.status().as_u16())
                 {
                     let str_output = if color {
-                        format!("{} {}\n", &b.1, colorize(&response))
+                        format!("{b1} {colorized}\n", b1=&b.1, colorized=colorize(&response))
                     } else if response.status().is_redirection() {
                         format!(
-                            "{} {} to {}\n",
-                            &b.1,
-                            &response.status(),
-                            &response
-                                .headers()
-                                .get(LOCATION)
-                                .unwrap_or(&HeaderValue::from_str("").unwrap())
-                                .to_str()
-                                .unwrap()
+                            "{b1} {status} to {location}\n",
+                            b1=&b.1,
+                            status=&response.status(),
+                            location=&response.headers().get(LOCATION).unwrap_or(&HeaderValue::from_str("").unwrap()).to_str().unwrap()
                         )
                     } else {
-                        format!("{} {}\n", &b.1, &response.status())
+                        format!("{b1} {status}\n", b1=&b.1, status=&response.status())
                     };
-                    print!("{}", str_output);
+                    print!("{str_output}");
                     ret.push_str(&str_output);
                 }
             }
             Err(e) => {
                 if verbose {
-                    eprintln!("{}", e);
+                    eprintln!("{e}");
                 }
             }
         }
