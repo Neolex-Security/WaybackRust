@@ -21,7 +21,7 @@ async fn main() {
     let _ = ansi_term::enable_ansi_support();
 
     let argsmatches = Command::new("waybackrust")
-        .version("0.2.17")
+        .version("0.2.18")
         .author("Neolex <hascoet.kevin@neolex-security.fr>")
         .about("Wayback machine tool for bug bounty")
         .subcommand(
@@ -344,13 +344,23 @@ async fn run_url(domain: String, config: UrlConfig) -> String {
     );
 
     let client = reqwest::Client::new();
-    let response = match client.get(url.as_str()).send().await {
-        Ok(res) => res,
-        Err(e) => {
-            eprintln!("{e}");
-            process::exit(-1)
+    let mut response = None;
+    for attempt in 1..=5 {
+        match client.get(url.as_str()).send().await {
+            Ok(res) => {
+                response = Some(res);
+                break;
+            },
+            Err(e) => {
+
+                if attempt == 5 {
+                    eprintln!("{e}");
+                    process::exit(-1)
+                }
+            }
         }
-    };
+    }
+    let response = response.expect("Failed to get a response after 5 attempts");
     use tokio_util::io::StreamReader;
     use tokio_util::codec::{FramedRead, LinesCodec};
     use futures::{StreamExt, TryStreamExt};
