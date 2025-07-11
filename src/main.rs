@@ -120,6 +120,7 @@ async fn main() {
                 .arg(
                     Arg::new("output_filepath")
                         .short('o').long("output-file").value_name("FILE")
+                        .value_parser(clap::value_parser!(PathBuf))
                         .help("Name of the file to write the list of uniq paths (default: print on stdout)"))
                 .arg(
                     Arg::new("verbose")
@@ -141,6 +142,7 @@ async fn main() {
                         .short('o')
                         .long("output-file")
                         .value_name("FILE")
+                        .value_parser(clap::value_parser!(PathBuf))
                         .help("Name of the file to write contents of archives (default: print on stdout)"))
                 .arg(
                     Arg::new("verbose")
