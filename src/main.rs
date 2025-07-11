@@ -348,8 +348,6 @@ async fn run_url(domain: String, config: UrlConfig) -> String {
         Ok(res) => res,
         Err(e) => {
             eprintln!("{e}");
-            println!("{}", url);
-            println!("{}", e);
             process::exit(-1)
         }
     };
