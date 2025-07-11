@@ -36,7 +36,7 @@ async fn main() {
                         .short('s')
                         .long("subs")
                         .help("Get subdomains too")
-                        .action(clap::ArgAction::SetFalse),
+                        .action(clap::ArgAction::SetTrue),
                 )
                 .arg(
                     Arg::new("verbose")
@@ -340,7 +340,7 @@ async fn run_url(domain: String, config: UrlConfig) -> String {
     };
 
     let url = format!(
-        "http://web.archive.org/cdx/search/cdx?url={pattern}&output=text&fl=original&collapse=urlkey"
+        "https://web.archive.org/cdx/search/cdx?url={pattern}&output=text&fl=original&collapse=urlkey"
     );
 
     let client = reqwest::Client::new();
@@ -348,6 +348,8 @@ async fn run_url(domain: String, config: UrlConfig) -> String {
         Ok(res) => res,
         Err(e) => {
             eprintln!("{e}");
+            println!("{}", url);
+            println!("{}", e);
             process::exit(-1)
         }
     };

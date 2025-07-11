@@ -1,6 +1,6 @@
 [package]
 name = "waybackrust"
-version = "0.2.16"
+version = "0.2.17"
 authors = ["Neolex (Kevin Hascoet) <hascoet.kevin@gmail.com>"]
 description = "A tool to query the WaybackMachine (https://archive.org/web/)..."
 edition = "2018"
