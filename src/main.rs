@@ -351,8 +351,6 @@ async fn run_url(domain: String, config: UrlConfig) -> String {
             process::exit(-1)
         }
     };
-    let response_status = response.status();
-    println!("{response_status}");
     use tokio_util::io::StreamReader;
     use tokio_util::codec::{FramedRead, LinesCodec};
     use futures::{StreamExt, TryStreamExt};

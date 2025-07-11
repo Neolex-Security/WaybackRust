@@ -1,6 +1,6 @@
 [package]
 name = "waybackrust"
-version = "0.2.15"
+version = "0.2.16"
 authors = ["Neolex (Kevin Hascoet) <hascoet.kevin@gmail.com>"]
 description = "A tool to query the WaybackMachine (https://archive.org/web/)..."
 edition = "2018"
@@ -13,6 +13,6 @@ futures = "0.3.4"
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12", features = ["stream","json"] }
 tokio-util = "0.7"
- 
+
 [target.'cfg(target_arch = "x86_64-unknown-linux-musl")'.dependencies]
 openssl = { version = "0.10", features = ["vendored"] }
