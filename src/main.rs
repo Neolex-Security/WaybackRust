@@ -21,7 +21,7 @@ async fn main() {
     let _ = ansi_term::enable_ansi_support();
 
     let argsmatches = Command::new("waybackrust")
-        .version("0.2.19")
+        .version("0.2.20")
         .author("Neolex <hascoet.kevin@neolex-security.fr>")
         .about("Wayback machine tool for bug bounty")
         .subcommand(
@@ -334,9 +334,9 @@ fn get_path(url: &str) -> String {
 
 async fn run_url(domain: String, config: UrlConfig) -> String {
     let pattern = if config.subs {
-        format!("*.{domain}%2F*")
+        format!("*.{domain}/*")
     } else {
-        format!("{domain}%2F*")
+        format!("{domain}/*")
     };
 
     let url = format!(
@@ -352,7 +352,10 @@ async fn run_url(domain: String, config: UrlConfig) -> String {
                 break;
             },
             Err(e) => {
-
+                eprintln!("{attempt} attempt(s) failed: {e}");
+                let delay_time = time::Duration::from_millis(2000*attempt);
+                sleep(delay_time).await;
+                
                 if attempt == 5 {
                     eprintln!("5 attempts failed: {e}");
                     process::exit(-1)
