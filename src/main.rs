@@ -21,7 +21,7 @@ async fn main() {
     let _ = ansi_term::enable_ansi_support();
 
     let argsmatches = Command::new("waybackrust")
-        .version("0.2.18")
+        .version("0.2.19")
         .author("Neolex <hascoet.kevin@neolex-security.fr>")
         .about("Wayback machine tool for bug bounty")
         .subcommand(
