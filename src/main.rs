@@ -340,7 +340,7 @@ async fn run_url(domain: String, config: UrlConfig) -> String {
     };
 
     let url = format!(
-        "https://web.archive.org/cdx/search/cdx?url={pattern}&output=text&fl=original&collapse=urlkey"
+        "http://web.archive.org/cdx/search/cdx?url={pattern}&output=text&fl=original&collapse=urlkey"
     );
 
     let client = reqwest::Client::new();
@@ -354,7 +354,7 @@ async fn run_url(domain: String, config: UrlConfig) -> String {
             Err(e) => {
 
                 if attempt == 5 {
-                    eprintln!("{e}");
+                    eprintln!("5 attempts failed: {e}");
                     process::exit(-1)
                 }
             }
@@ -462,7 +462,7 @@ async fn get_archives(url: &str, verbose: bool) -> HashMap<String, String> {
     if verbose {
         println!("Looking for archives for {url}...")
     };
-    let to_fetch= format!("https://web.archive.org/cdx/search/cdx?url={url}&output_filepath=text&fl=timestamp,original&filter=statuscode:200&collapse=digest");
+    let to_fetch= format!("http://web.archive.org/cdx/search/cdx?url={url}&output_filepath=text&fl=timestamp,original&filter=statuscode:200&collapse=digest");
     let lines: Vec<String> = reqwest::get(to_fetch.as_str())
         .await
         .expect("Error in GET request")
@@ -534,7 +534,7 @@ async fn get_all_robot_content(archives: HashMap<String, String>, verbose: bool)
 
 // Unbuffered get_archive_content
 async fn get_archive_content(url: String, timestamp: String) -> String {
-    let timestampurl = format!("https://web.archive.org/web/{timestamp}/{url}");
+    let timestampurl = format!("http://web.archive.org/web/{timestamp}/{url}");
     let response = match reqwest::get(&timestampurl).await {
         Ok(resp) => resp,
         Err(err) => {
